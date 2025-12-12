@@ -1,0 +1,180 @@
+from typing import Optional, Dict, Any, List
+import httpx
+import json
+
+from llm.base import LLMProvider
+from utils.logging import get_logger
+
+
+logger = get_logger(__name__)
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI API provider implementation"""
+    
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4",
+        temperature: float = 0.7,
+        embedding_model: str = "text-embedding-3-small",
+        timeout: float = 60.0,
+        max_retries: int = 3
+    ):
+        self.api_key = api_key
+        self.model = model
+        self.temperature = temperature
+        self.embedding_model = embedding_model
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.base_url = "https://api.openai.com/v1"
+        
+        self.client = httpx.AsyncClient(
+            timeout=timeout,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+        )
+    
+    async def generate(
+        self, 
+        prompt: str, 
+        context: Optional[Dict[str, Any]] = None,
+        temperature: Optional[float] = None
+    ) -> str:
+        """Generate text response using OpenAI Chat API"""
+        
+        messages = []
+        
+        if context:
+            context_str = json.dumps(context, ensure_ascii=False, indent=2)
+            messages.append({
+                "role": "system",
+                "content": f"Context information:\n{context_str}"
+            })
+        
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature if temperature is not None else self.temperature
+        }
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                result = data["choices"][0]["message"]["content"]
+                logger.info(f"OpenAI generate successful (attempt {attempt + 1})")
+                return result
+                
+            except httpx.HTTPError as e:
+                logger.error(f"OpenAI API error (attempt {attempt + 1}): {e}")
+                if attempt == self.max_retries - 1:
+                    raise
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error in OpenAI generate: {e}")
+                raise
+    
+    async def generate_with_tools(
+        self, 
+        prompt: str, 
+        tools: List[Dict[str, Any]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Generate response with tool calling using OpenAI function calling"""
+        
+        messages = []
+        
+        if context:
+            context_str = json.dumps(context, ensure_ascii=False, indent=2)
+            messages.append({
+                "role": "system",
+                "content": f"Context information:\n{context_str}"
+            })
+        
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "temperature": self.temperature
+        }
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                message = data["choices"][0]["message"]
+                
+                result = {
+                    "content": message.get("content", ""),
+                    "tool_calls": message.get("tool_calls", [])
+                }
+                
+                logger.info(f"OpenAI generate_with_tools successful (attempt {attempt + 1})")
+                return result
+                
+            except httpx.HTTPError as e:
+                logger.error(f"OpenAI API error (attempt {attempt + 1}): {e}")
+                if attempt == self.max_retries - 1:
+                    raise
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error in OpenAI generate_with_tools: {e}")
+                raise
+    
+    async def embed(self, text: str) -> List[float]:
+        """Generate embeddings using OpenAI embeddings API"""
+        
+        payload = {
+            "model": self.embedding_model,
+            "input": text
+        }
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/embeddings",
+                    json=payload
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                embedding = data["data"][0]["embedding"]
+                logger.debug(f"OpenAI embed successful (attempt {attempt + 1})")
+                return embedding
+                
+            except httpx.HTTPError as e:
+                logger.error(f"OpenAI API error (attempt {attempt + 1}): {e}")
+                if attempt == self.max_retries - 1:
+                    raise
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error in OpenAI embed: {e}")
+                raise
+    
+    async def close(self) -> None:
+        """Close HTTP client"""
+        await self.client.aclose()
+

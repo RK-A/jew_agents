@@ -1,0 +1,542 @@
+=============================================================================
+AI JEWELRY CONSULTATION SYSTEM - DEPLOYMENT GUIDE
+=============================================================================
+
+This guide covers deployment scenarios from development to production.
+
+=============================================================================
+PREREQUISITES
+=============================================================================
+
+Required:
+- Docker & Docker Compose (recommended)
+- Python 3.10+ (for local development)
+- PostgreSQL 16+ (if not using Docker)
+- API keys for LLM provider (OpenAI or GigaChat)
+
+Optional:
+- Nginx (for production reverse proxy)
+- SSL certificates (for HTTPS)
+- Monitoring tools (Prometheus, Grafana)
+
+=============================================================================
+DEPLOYMENT OPTION 1: DOCKER COMPOSE (RECOMMENDED)
+=============================================================================
+
+This is the easiest and recommended way to deploy the system.
+
+Step 1: Clone and Configure
+----------------------------
+git clone <repository-url>
+cd agents
+
+# Copy environment template
+cp env.example .env
+
+# Edit .env and set your API keys
+nano .env
+
+Required settings:
+- LLM_API_KEY=your_actual_api_key
+- EMBEDDING_API_KEY=your_actual_api_key
+- LLM_PROVIDER=openai (or gigachat)
+- LLM_MODEL=gpt-4 (or your preferred model)
+
+Step 2: Start Services
+----------------------
+# Start all services (PostgreSQL, Qdrant, Backend)
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f backend
+
+# Check status
+docker-compose ps
+
+Step 3: Initialize Database
+---------------------------
+# Initialize tables and Qdrant collection
+docker-compose exec backend python scripts/manage_data.py init
+
+# Fill with test data (optional for demo)
+docker-compose exec backend python scripts/manage_data.py fill --products 80 --users 25
+
+# Sync to Qdrant
+docker-compose exec backend python scripts/manage_data.py sync
+
+Step 4: Verify Installation
+---------------------------
+# Run verification script
+docker-compose exec backend python scripts/verify_installation.py
+
+# Test API
+curl http://localhost:8000/api/health
+
+# Visit API docs
+open http://localhost:8000/docs
+
+Step 5: Production Configuration
+--------------------------------
+For production, edit docker-compose.yml:
+
+1. Change PostgreSQL password:
+   POSTGRES_PASSWORD: <strong-password>
+
+2. Update POSTGRES_URL in .env:
+   POSTGRES_URL=postgresql+asyncpg://postgres:<strong-password>@postgres:5432/jewelry
+
+3. Add resource limits:
+   deploy:
+     resources:
+       limits:
+         cpus: '2'
+         memory: 4G
+
+4. Enable restart policy:
+   restart: unless-stopped
+
+5. Use production WSGI server (already configured with uvicorn)
+
+=============================================================================
+DEPLOYMENT OPTION 2: LOCAL DEVELOPMENT
+=============================================================================
+
+For development without Docker:
+
+Step 1: Install Dependencies
+----------------------------
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+Step 2: Setup External Services
+-------------------------------
+# Install and start PostgreSQL
+sudo apt-get install postgresql-16
+sudo systemctl start postgresql
+
+# Create database
+sudo -u postgres createdb jewelry
+
+# Install and start Qdrant
+docker run -d -p 6333:6333 qdrant/qdrant
+
+Step 3: Configure Environment
+-----------------------------
+cp env.example .env
+nano .env
+
+Update database URL for local PostgreSQL:
+POSTGRES_URL=postgresql+asyncpg://postgres:password@localhost:5432/jewelry
+
+Step 4: Initialize and Run
+--------------------------
+# Initialize database
+python scripts/manage_data.py init
+
+# Fill with test data
+python scripts/manage_data.py fill
+
+# Sync to Qdrant
+python scripts/manage_data.py sync
+
+# Run backend
+python main.py
+
+# Or with uvicorn directly
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+=============================================================================
+DEPLOYMENT OPTION 3: PRODUCTION SERVER
+=============================================================================
+
+For production deployment on a VPS or dedicated server:
+
+Step 1: Server Setup
+--------------------
+# Update system
+sudo apt-get update && sudo apt-get upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Install Docker Compose
+sudo apt-get install docker-compose-plugin
+
+# Create application user
+sudo useradd -m -s /bin/bash jewelry-app
+sudo usermod -aG docker jewelry-app
+
+Step 2: Deploy Application
+--------------------------
+# Switch to app user
+sudo su - jewelry-app
+
+# Clone repository
+git clone <repository-url> /home/jewelry-app/app
+cd /home/jewelry-app/app
+
+# Configure environment
+cp env.example .env
+nano .env
+
+# Set production values:
+AUTO_FILL_DATA=false  # Don't auto-fill in production
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# Start services
+docker-compose up -d
+
+# Initialize (without test data)
+docker-compose exec backend python scripts/manage_data.py init
+
+Step 3: Setup Nginx Reverse Proxy
+---------------------------------
+# Install Nginx
+sudo apt-get install nginx
+
+# Create Nginx configuration
+sudo nano /etc/nginx/sites-available/jewelry-api
+
+Add configuration:
+
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/jewelry-api /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+Step 4: Setup SSL with Let's Encrypt
+------------------------------------
+# Install Certbot
+sudo apt-get install certbot python3-certbot-nginx
+
+# Obtain certificate
+sudo certbot --nginx -d your-domain.com
+
+# Auto-renewal is configured automatically
+
+Step 5: Setup Systemd Service
+-----------------------------
+# Create systemd service
+sudo nano /etc/systemd/system/jewelry-api.service
+
+Add:
+
+[Unit]
+Description=AI Jewelry Consultation System
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/jewelry-app/app
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+User=jewelry-app
+
+[Install]
+WantedBy=multi-user.target
+
+# Enable and start
+sudo systemctl enable jewelry-api
+sudo systemctl start jewelry-api
+
+Step 6: Setup Monitoring
+------------------------
+# Add Prometheus monitoring (optional)
+# Add to docker-compose.yml:
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+=============================================================================
+DEPLOYMENT OPTION 4: CLOUD PLATFORMS
+=============================================================================
+
+AWS Deployment
+--------------
+1. Use AWS RDS for PostgreSQL
+2. Deploy Qdrant on EC2 or use managed vector DB
+3. Deploy backend on ECS/EKS or EC2
+4. Use ALB for load balancing
+5. Store .env in AWS Secrets Manager
+
+Google Cloud Deployment
+-----------------------
+1. Use Cloud SQL for PostgreSQL
+2. Deploy Qdrant on GCE
+3. Deploy backend on Cloud Run or GKE
+4. Use Cloud Load Balancing
+5. Store secrets in Secret Manager
+
+Azure Deployment
+---------------
+1. Use Azure Database for PostgreSQL
+2. Deploy Qdrant on Azure VM
+3. Deploy backend on Azure Container Instances or AKS
+4. Use Azure Load Balancer
+5. Store secrets in Key Vault
+
+Heroku Deployment
+----------------
+1. Use Heroku Postgres add-on
+2. Deploy Qdrant on separate service
+3. Deploy backend as Heroku app
+4. Set environment variables in Heroku config
+
+=============================================================================
+ENVIRONMENT VARIABLES REFERENCE
+=============================================================================
+
+Required:
+---------
+LLM_API_KEY              - API key for LLM provider
+EMBEDDING_API_KEY        - API key for embeddings
+POSTGRES_URL             - PostgreSQL connection string
+QDRANT_URL               - Qdrant server URL
+
+Optional:
+---------
+LLM_PROVIDER             - openai or gigachat (default: openai)
+LLM_MODEL                - Model name (default: gpt-4)
+LLM_TEMPERATURE          - 0.0-1.0 (default: 0.7)
+EMBEDDING_MODEL          - Embedding model name
+QDRANT_COLLECTION        - Collection name (default: jewelry_products)
+API_HOST                 - Bind host (default: 0.0.0.0)
+API_PORT                 - Port number (default: 8000)
+AUTO_FILL_DATA           - Auto-fill test data (default: false)
+DEFAULT_PRODUCTS_COUNT   - Number of test products (default: 80)
+DEFAULT_USERS_COUNT      - Number of test users (default: 25)
+DEFAULT_CONSULTATIONS_COUNT - Number of test consultations (default: 40)
+
+=============================================================================
+SECURITY BEST PRACTICES
+=============================================================================
+
+1. API Keys
+   - Never commit .env files to git
+   - Use strong, unique API keys
+   - Rotate keys periodically
+   - Use secrets management in production
+
+2. Database
+   - Use strong PostgreSQL password
+   - Restrict database access by IP
+   - Enable SSL for database connections
+   - Regular backups
+
+3. Network
+   - Use HTTPS in production (SSL/TLS)
+   - Configure firewall rules
+   - Use VPC/private networks
+   - Enable rate limiting
+
+4. Application
+   - Keep dependencies updated
+   - Monitor for security vulnerabilities
+   - Enable CORS only for trusted origins
+   - Implement authentication/authorization
+
+5. Monitoring
+   - Monitor API access logs
+   - Set up alerts for errors
+   - Track resource usage
+   - Monitor LLM API usage and costs
+
+=============================================================================
+BACKUP AND RECOVERY
+=============================================================================
+
+Database Backup
+---------------
+# Backup PostgreSQL
+docker-compose exec postgres pg_dump -U postgres jewelry > backup.sql
+
+# Restore
+docker-compose exec -T postgres psql -U postgres jewelry < backup.sql
+
+Qdrant Backup
+------------
+# Backup Qdrant collection
+curl -X POST "http://localhost:6333/collections/jewelry_products/snapshots"
+
+# Download snapshot
+curl "http://localhost:6333/collections/jewelry_products/snapshots/<snapshot-name>" \
+  --output qdrant_backup.snapshot
+
+Configuration Backup
+-------------------
+# Backup .env and docker-compose.yml
+tar -czf config_backup.tar.gz .env docker-compose.yml
+
+Full System Backup
+-----------------
+# Stop services
+docker-compose down
+
+# Backup all data
+tar -czf full_backup.tar.gz \
+  .env \
+  docker-compose.yml \
+  postgres_data/ \
+  qdrant_data/
+
+# Restart services
+docker-compose up -d
+
+=============================================================================
+SCALING CONSIDERATIONS
+=============================================================================
+
+Horizontal Scaling
+-----------------
+1. Run multiple backend instances behind load balancer
+2. Use shared PostgreSQL and Qdrant instances
+3. Implement session management (if needed)
+4. Use Redis for caching (optional)
+
+Vertical Scaling
+---------------
+1. Increase Docker resource limits
+2. Upgrade server resources (CPU, RAM)
+3. Optimize database queries
+4. Use connection pooling (already implemented)
+
+Database Scaling
+---------------
+1. Enable PostgreSQL replication
+2. Use read replicas for analytics
+3. Implement database sharding (if needed)
+4. Regular VACUUM and ANALYZE
+
+Qdrant Scaling
+-------------
+1. Use Qdrant cluster mode
+2. Increase vector dimensions if needed
+3. Optimize search parameters
+4. Use collection aliases for zero-downtime updates
+
+=============================================================================
+MONITORING AND MAINTENANCE
+=============================================================================
+
+Health Checks
+------------
+# API health
+curl http://localhost:8000/api/health
+
+# Database status
+python scripts/manage_data.py status
+
+# Verify installation
+python scripts/verify_installation.py
+
+Logs
+----
+# View all logs
+docker-compose logs -f
+
+# View specific service
+docker-compose logs -f backend
+
+# View last 100 lines
+docker-compose logs --tail=100 backend
+
+Updates
+-------
+# Pull latest code
+git pull origin main
+
+# Rebuild and restart
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# Run migrations (if any)
+docker-compose exec backend python scripts/manage_data.py init
+
+Cleanup
+-------
+# Remove old Docker images
+docker system prune -a
+
+# Clear old logs
+docker-compose logs --tail=0 backend > /dev/null
+
+# Vacuum database
+docker-compose exec postgres vacuumdb -U postgres -d jewelry -z
+
+=============================================================================
+TROUBLESHOOTING
+=============================================================================
+
+Common Issues:
+
+1. "Database connection failed"
+   - Check PostgreSQL is running: docker-compose ps
+   - Verify POSTGRES_URL in .env
+   - Check firewall rules
+
+2. "Qdrant not available"
+   - Check Qdrant is running: docker-compose ps
+   - Verify QDRANT_URL in .env
+   - Check Qdrant logs: docker-compose logs qdrant
+
+3. "LLM API error"
+   - Verify API key is correct
+   - Check API quota/credits
+   - Check network connectivity
+
+4. "Out of memory"
+   - Increase Docker memory limits
+   - Reduce batch sizes in data generation
+   - Optimize queries
+
+5. "Slow API responses"
+   - Check LLM API latency
+   - Optimize database queries
+   - Add caching layer
+   - Scale horizontally
+
+=============================================================================
+SUPPORT
+=============================================================================
+
+For issues and questions:
+1. Check QUICKSTART.txt for setup instructions
+2. Review logs: docker-compose logs -f
+3. Run verification: python scripts/verify_installation.py
+4. Check API docs: http://localhost:8000/docs
+
+=============================================================================
+
