@@ -2,9 +2,10 @@
 
 import asyncio
 from config import settings
-from llm.factory import create_llm_provider
-from rag import create_embedding_provider, QdrantService
-from agents import AgentOrchestrator
+from llm.factory import create_llm_provider_from_config
+from rag.embedding_factory import create_embeddings_from_config
+from rag.qdrant_service import QdrantService
+from agents.orchestrator import AgentOrchestrator
 
 
 async def example_consultant_agent():
@@ -14,23 +15,17 @@ async def example_consultant_agent():
     print("EXAMPLE 1: Consultant Agent")
     print("="*60)
     
-    # Initialize LLM and RAG
-    llm_provider = create_llm_provider(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        temperature=settings.llm_temperature
-    )
+        # Initialize LLM and RAG
+    llm_provider = create_llm_provider_from_config(settings)
     
-    embedding_provider = create_embedding_provider(
-        model=settings.embedding_model,
-        api_key=settings.embedding_api_key
-    )
+    embeddings = create_embeddings_from_config(settings)
+    embedding_dimension = settings.get_embedding_dimension()
     
     qdrant_service = QdrantService(
         url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
-        embedding_provider=embedding_provider
+        embeddings=embeddings,
+        embedding_dimension=embedding_dimension
     )
     
     # Initialize orchestrator
@@ -67,12 +62,7 @@ async def example_analysis_agent():
     print("="*60)
     
     # Initialize LLM
-    llm_provider = create_llm_provider(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        temperature=settings.llm_temperature
-    )
+    llm_provider = create_llm_provider_from_config(settings)
     
     # Initialize orchestrator
     orchestrator = AgentOrchestrator(
@@ -111,12 +101,7 @@ async def example_trend_agent():
     print("="*60)
     
     # Initialize LLM
-    llm_provider = create_llm_provider(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        temperature=settings.llm_temperature
-    )
+    llm_provider = create_llm_provider_from_config(settings)
     
     # Initialize orchestrator
     orchestrator = AgentOrchestrator(
@@ -181,12 +166,7 @@ async def example_orchestrator_status():
     print("="*60)
     
     # Initialize LLM
-    llm_provider = create_llm_provider(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        temperature=settings.llm_temperature
-    )
+    llm_provider = create_llm_provider_from_config(settings)
     
     # Initialize orchestrator
     orchestrator = AgentOrchestrator(
@@ -214,12 +194,7 @@ async def example_multi_agent_task():
     print("="*60)
     
     # Initialize LLM
-    llm_provider = create_llm_provider(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
-        temperature=settings.llm_temperature
-    )
+    llm_provider = create_llm_provider_from_config(settings)
     
     # Initialize orchestrator
     orchestrator = AgentOrchestrator(

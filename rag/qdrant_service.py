@@ -12,7 +12,7 @@ from qdrant_client.models import (
     MatchValue,
     Range,
 )
-from rag.embeddings import EmbeddingProvider
+from langchain_core.embeddings import Embeddings
 
 
 logger = logging.getLogger(__name__)
@@ -25,11 +25,13 @@ class QdrantService:
         self,
         url: str,
         collection_name: str,
-        embedding_provider: EmbeddingProvider
+        embeddings: Embeddings,
+        embedding_dimension: int
     ):
         self.client = AsyncQdrantClient(url=url)
         self.collection_name = collection_name
-        self.embedding_provider = embedding_provider
+        self.embeddings = embeddings
+        self.embedding_dimension = embedding_dimension
         logger.info(f"Initialized Qdrant service: {url}, collection: {collection_name}")
     
     async def create_collection(self) -> bool:
@@ -42,15 +44,14 @@ class QdrantService:
                 logger.info(f"Collection {self.collection_name} already exists")
                 return False
             
-            dimension = self.embedding_provider.get_dimension()
             await self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
-                    size=dimension,
+                    size=self.embedding_dimension,
                     distance=Distance.COSINE
                 )
             )
-            logger.info(f"Created collection {self.collection_name} with dimension {dimension}")
+            logger.info(f"Created collection {self.collection_name} with dimension {self.embedding_dimension}")
             return True
         
         except Exception as e:
@@ -75,7 +76,7 @@ class QdrantService:
     ) -> bool:
         """Add or update product in Qdrant"""
         try:
-            embedding = await self.embedding_provider.embed(description)
+            embedding = await self.embeddings.aembed_query(description)
             
             point = PointStruct(
                 id=product_id,
@@ -108,7 +109,7 @@ class QdrantService:
                 self._build_product_description(p) for p in products
             ]
             
-            embeddings = await self.embedding_provider.embed_batch(descriptions)
+            embeddings_list = await self.embeddings.aembed_documents(descriptions)
             
             points = [
                 PointStruct(
@@ -116,7 +117,7 @@ class QdrantService:
                     vector=embedding,
                     payload=product
                 )
-                for product, embedding in zip(products, embeddings)
+                for product, embedding in zip(products, embeddings_list)
             ]
             
             await self.client.upsert(
@@ -154,7 +155,7 @@ class QdrantService:
     ) -> List[Dict[str, Any]]:
         """Semantic search for products with optional filters"""
         try:
-            query_embedding = await self.embedding_provider.embed(query)
+            query_embedding = await self.embeddings.aembed_query(query)
             
             query_filter = self._build_filter(
                 category_filter=category_filter,
@@ -290,11 +291,21 @@ class QdrantService:
         """Get collection information and statistics"""
         try:
             info = await self.client.get_collection(self.collection_name)
+            
+            # Compatible with both old and new qdrant-client versions
+            vectors_count = getattr(info, 'vectors_count', None)
+            if vectors_count is None:
+                # New API: info has vectors_count as part of stats or count
+                vectors_count = getattr(info, 'vectors_count', 0)
+            
+            points_count = getattr(info, 'points_count', 0)
+            
             return {
-                "name": info.config.params.vectors.size if hasattr(info.config.params, 'vectors') else None,
-                "vectors_count": info.vectors_count,
-                "points_count": info.points_count,
-                "status": info.status,
+                "name": self.collection_name,
+                "vectors_count": vectors_count,
+                "points_count": points_count,
+                "status": str(info.status) if hasattr(info, 'status') else "unknown",
+                "vector_size": self.embedding_dimension,
             }
         except Exception as e:
             logger.error(f"Error getting collection info: {e}", exc_info=True)

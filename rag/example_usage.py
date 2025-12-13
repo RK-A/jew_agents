@@ -2,29 +2,26 @@
 
 import asyncio
 from config import settings
-from rag import (
-    create_embedding_provider,
-    QdrantService,
-    RAGRetriever,
-)
+from rag.embedding_factory import create_embeddings_from_config
+from rag.qdrant_service import QdrantService
+from rag.retrieval import RAGRetriever
 
 
 async def example_rag_usage():
     """Demonstrate RAG system usage"""
     
-    # 1. Create embedding provider
-    embedding_provider = create_embedding_provider(
-        model=settings.embedding_model,
-        api_key=settings.embedding_api_key
-    )
-    print(f"✓ Created embedding provider: {settings.embedding_model}")
-    print(f"  Dimension: {embedding_provider.get_dimension()}")
+    # 1. Create LangChain embeddings
+    embeddings = create_embeddings_from_config(settings)
+    embedding_dimension = settings.get_embedding_dimension()
+    print(f"✓ Created LangChain embeddings: {settings.embedding_provider}/{settings.embedding_model}")
+    print(f"  Dimension: {embedding_dimension}")
     
     # 2. Initialize Qdrant service
     qdrant_service = QdrantService(
         url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
-        embedding_provider=embedding_provider
+        embeddings=embeddings,
+        embedding_dimension=embedding_dimension
     )
     print(f"✓ Initialized Qdrant service: {settings.qdrant_url}")
     
@@ -115,15 +112,14 @@ async def example_rag_usage():
 async def example_update_trend_scores():
     """Example of updating trend scores"""
     
-    embedding_provider = create_embedding_provider(
-        model=settings.embedding_model,
-        api_key=settings.embedding_api_key
-    )
+    embeddings = create_embeddings_from_config(settings)
+    embedding_dimension = settings.get_embedding_dimension()
     
     qdrant_service = QdrantService(
         url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
-        embedding_provider=embedding_provider
+        embeddings=embeddings,
+        embedding_dimension=embedding_dimension
     )
     
     # Update trend scores for specific products

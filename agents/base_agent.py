@@ -1,6 +1,7 @@
 """Base agent class for all AI agents in the system"""
 
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from datetime import datetime
@@ -17,10 +18,18 @@ logger = logging.getLogger(__name__)
 class BaseAgent(ABC):
     """Abstract base class for all AI agents"""
     
+    LANGUAGE_INSTRUCTIONS = {
+        "en": "Respond in English.",
+        "ru": "Отвечай на русском языке.",
+        "auto": "Respond in the same language as the user's message."
+    }
+    
     def __init__(
         self,
         llm_provider: LLMProvider,
-        rag_service: Optional[QdrantService] = None
+        rag_service: Optional[QdrantService] = None,
+        language: str = "auto",
+        custom_system_prompt: Optional[str] = None
     ):
         """
         Initialize base agent
@@ -28,11 +37,34 @@ class BaseAgent(ABC):
         Args:
             llm_provider: LLM provider for text generation
             rag_service: Optional RAG service for product search
+            language: Communication language (en, ru, auto)
+            custom_system_prompt: Optional custom system prompt override
         """
         self.llm = llm_provider
         self.rag = rag_service
+        self.language = language
+        self.custom_system_prompt = custom_system_prompt
         self.logger = logging.getLogger(self.__class__.__name__)
         self.agent_type = self.__class__.__name__.replace("Agent", "").lower()
+    
+    def get_system_prompt(self, default_prompt: str) -> str:
+        """
+        Get system prompt with language instruction
+        
+        Args:
+            default_prompt: Default system prompt for this agent
+        
+        Returns:
+            Complete system prompt with language instruction
+        """
+        if self.custom_system_prompt:
+            base_prompt = self.custom_system_prompt
+        else:
+            base_prompt = default_prompt
+        
+        language_instruction = self.LANGUAGE_INSTRUCTIONS.get(self.language, self.LANGUAGE_INSTRUCTIONS["auto"])
+        
+        return f"{base_prompt}\n\nLanguage Instruction: {language_instruction}"
     
     @abstractmethod
     async def process(self, *args, **kwargs) -> Dict[str, Any]:
@@ -72,6 +104,7 @@ class BaseAgent(ABC):
                 repo = ConsultationRecordRepository(session)
                 
                 record_data = {
+                    "id": str(uuid.uuid4()),  # Generate unique ID
                     "user_id": user_id,
                     "agent_type": agent_type,
                     "message": input_msg,

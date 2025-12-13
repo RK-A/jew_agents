@@ -19,7 +19,9 @@ class AgentOrchestrator:
     def __init__(
         self,
         llm_provider: LLMProvider,
-        rag_service: Optional[QdrantService] = None
+        rag_service: Optional[QdrantService] = None,
+        language: str = "auto",
+        custom_prompts: Optional[Dict[str, str]] = None
     ):
         """
         Initialize agent orchestrator
@@ -27,27 +29,37 @@ class AgentOrchestrator:
         Args:
             llm_provider: LLM provider for all agents
             rag_service: Optional RAG service for product search
+            language: Communication language for all agents (en, ru, auto)
+            custom_prompts: Optional dict with custom prompts for each agent type
         """
         self.llm_provider = llm_provider
         self.rag_service = rag_service
+        self.language = language
+        self.custom_prompts = custom_prompts or {}
         
-        # Initialize all agents
+        # Initialize all agents with language and custom prompts
         self.consultant_agent = ConsultantAgent(
             llm_provider=llm_provider,
-            rag_service=rag_service
+            rag_service=rag_service,
+            language=language,
+            custom_system_prompt=self.custom_prompts.get("consultant")
         )
         
         self.analysis_agent = AnalysisAgent(
             llm_provider=llm_provider,
-            rag_service=None  # Analysis agent doesn't need RAG
+            rag_service=None,  # Analysis agent doesn't need RAG
+            language=language,
+            custom_system_prompt=self.custom_prompts.get("analysis")
         )
         
         self.trend_agent = TrendAgent(
             llm_provider=llm_provider,
-            rag_service=rag_service  # Trend agent may update product scores
+            rag_service=rag_service,  # Trend agent may update product scores
+            language=language,
+            custom_system_prompt=self.custom_prompts.get("trend")
         )
         
-        logger.info("Agent orchestrator initialized with all agents")
+        logger.info(f"Agent orchestrator initialized with all agents (language: {language})")
     
     async def handle_user_consultation(
         self,

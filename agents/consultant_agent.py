@@ -1,5 +1,6 @@
 """Consultation agent for personalized jewelry recommendations"""
 
+import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -9,11 +10,20 @@ from database.repositories import CustomerPreferenceRepository
 from rag.retrieval import RAGRetriever
 
 
+def _clean_thinking_blocks(text: str) -> str:
+    """Remove [THINK]...[/THINK] blocks from LLM response"""
+    cleaned = re.sub(r'\[THINK\].*?\[/THINK\]', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)
+    return cleaned.strip()
+
+
 class ConsultantAgent(BaseAgent):
     """Agent for interactive jewelry consultation and recommendations"""
     
-    SYSTEM_PROMPT = """You are an expert jewelry consultant with deep knowledge of precious metals, gemstones, and fashion trends.
+    DEFAULT_SYSTEM_PROMPT = """You are an expert jewelry consultant with deep knowledge of precious metals, gemstones, and fashion trends.
 Your role is to help customers find the perfect jewelry by understanding their preferences, style, budget, and occasion.
+
+IMPORTANT: Respond ONLY with your customer-facing message. Do NOT include internal thoughts, reasoning, or [THINK] blocks in your response.
 
 Guidelines:
 1. Be warm, friendly, and professional
@@ -33,8 +43,8 @@ If the customer hasn't shared their preferences yet, gently ask about:
 - Skin tone (to recommend complementary metals)
 """
     
-    def __init__(self, llm_provider, rag_service):
-        super().__init__(llm_provider, rag_service)
+    def __init__(self, llm_provider, rag_service, language: str = "auto", custom_system_prompt: str = None):
+        super().__init__(llm_provider, rag_service, language, custom_system_prompt)
         self.rag_retriever = RAGRetriever(rag_service) if rag_service else None
     
     async def process(
@@ -230,11 +240,16 @@ JSON:"""
                     history_parts.append(f"{role.capitalize()}: {content}")
                 history_text = "\n".join(history_parts)
             
-            prompt = f"""{self.SYSTEM_PROMPT}
+            # Prepare history section for prompt
+            history_section = f"Previous conversation:\n{history_text}" if history_text else ""
+            
+            system_prompt = self.get_system_prompt(self.DEFAULT_SYSTEM_PROMPT)
+            
+            prompt = f"""{system_prompt}
 
 {context}
 
-{"Previous conversation:\n" + history_text if history_text else ""}
+{history_section}
 
 Customer: {message}
 
@@ -245,7 +260,7 @@ Consultant:"""
                 temperature=0.7
             )
             
-            return response.strip()
+            return _clean_thinking_blocks(response)
         
         except Exception as e:
             self.logger.error(f"Error generating response: {e}", exc_info=True)

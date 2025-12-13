@@ -12,7 +12,7 @@ from database.repositories import CustomerPreferenceRepository, ConsultationReco
 class AnalysisAgent(BaseAgent):
     """Agent for analyzing customer preferences and forecasting demand"""
     
-    SYSTEM_PROMPT = """You are a market analyst specializing in jewelry retail and customer behavior.
+    DEFAULT_SYSTEM_PROMPT = """You are a market analyst specializing in jewelry retail and customer behavior.
 Your role is to analyze customer preferences, identify trends, and provide actionable insights for business decisions.
 
 When analyzing customer data, focus on:
@@ -306,7 +306,9 @@ Provide clear, data-driven insights with specific recommendations for:
 {json.dumps(segments, indent=2, ensure_ascii=False)}
 """
             
-            prompt = f"""{self.SYSTEM_PROMPT}
+            system_prompt = self.get_system_prompt(self.DEFAULT_SYSTEM_PROMPT)
+            
+            prompt = f"""{system_prompt}
 
 Based on the following data analysis, provide a comprehensive market insights report:
 

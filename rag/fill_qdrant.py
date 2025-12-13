@@ -7,7 +7,7 @@ from sqlalchemy import select
 from config import settings
 from database.session import async_session_factory
 from database.models import JewelryProduct
-from rag.embeddings import create_embedding_provider
+from rag.embedding_factory import create_embeddings_from_config
 from rag.qdrant_service import QdrantService
 
 
@@ -66,15 +66,14 @@ async def sync_products_to_qdrant(
     try:
         logger.info("Starting product sync to Qdrant...")
         
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         exists = await qdrant_service.collection_exists()
@@ -127,15 +126,14 @@ async def sync_single_product(product_id: int) -> bool:
                 logger.error(f"Product {product_id} not found in database")
                 return False
             
-            embedding_provider = create_embedding_provider(
-                model=settings.embedding_model,
-                api_key=settings.embedding_api_key
-            )
+            embeddings = create_embeddings_from_config(settings)
+            embedding_dimension = settings.get_embedding_dimension()
             
             qdrant_service = QdrantService(
                 url=settings.qdrant_url,
                 collection_name=settings.qdrant_collection,
-                embedding_provider=embedding_provider
+                embeddings=embeddings,
+                embedding_dimension=embedding_dimension
             )
             
             product_dict = {
@@ -180,15 +178,14 @@ async def update_product_trend_scores(trend_updates: Dict[str, float]) -> int:
         Number of products updated
     """
     try:
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         count = await qdrant_service.update_trend_scores_batch(trend_updates)

@@ -11,9 +11,9 @@ from database.repositories import (
     CustomerPreferenceRepository,
     ConsultationRecordRepository
 )
-from llm.factory import create_llm_provider
+from llm.factory import create_llm_provider_from_config
 from rag.qdrant_service import QdrantService
-from rag.embeddings import create_embedding_provider
+from rag.embedding_factory import create_embeddings_from_config
 from agents.orchestrator import AgentOrchestrator
 from utils.logging import get_logger
 
@@ -70,7 +70,7 @@ async def get_llm_provider():
     
     if _llm_provider_instance is None:
         try:
-            _llm_provider_instance = create_llm_provider(settings)
+            _llm_provider_instance = create_llm_provider_from_config(settings)
             logger.info(f"LLM provider initialized: {settings.llm_provider}")
         except Exception as e:
             logger.error(f"Failed to initialize LLM provider: {e}")
@@ -83,30 +83,27 @@ async def get_llm_provider():
 
 
 # Embeddings service dependency
-_embeddings_provider_instance = None
+_embeddings_instance = None
 
 async def get_embeddings_service():
     """
-    Get embeddings provider singleton instance
+    Get LangChain embeddings singleton instance
     
     Returns:
-        EmbeddingProvider: Configured embeddings provider
+        Embeddings: Configured LangChain embeddings
     """
-    global _embeddings_provider_instance
+    global _embeddings_instance
     
-    if _embeddings_provider_instance is None:
+    if _embeddings_instance is None:
         try:
-            _embeddings_provider_instance = create_embedding_provider(
-                model=settings.embedding_model,
-                api_key=settings.embedding_api_key
-            )
-            logger.info(f"Embeddings provider initialized: {settings.embedding_model}")
+            _embeddings_instance = create_embeddings_from_config(settings)
+            logger.info(f"LangChain embeddings initialized: {settings.embedding_provider}/{settings.embedding_model}")
         except Exception as e:
-            logger.error(f"Failed to initialize embeddings provider: {e}")
+            logger.error(f"Failed to initialize embeddings: {e}")
             # Non-critical, can continue without embeddings
-            logger.warning("Continuing without embeddings provider")
+            logger.warning("Continuing without embeddings")
     
-    return _embeddings_provider_instance
+    return _embeddings_instance
 
 
 # Qdrant service dependency
@@ -119,7 +116,7 @@ async def get_qdrant_service(
     Get Qdrant service singleton instance
     
     Args:
-        embeddings_service: Embeddings service dependency
+        embeddings_service: LangChain embeddings dependency
     
     Returns:
         QdrantService: Configured Qdrant service
@@ -128,12 +125,14 @@ async def get_qdrant_service(
     
     if _qdrant_service_instance is None:
         try:
+            embedding_dimension = settings.get_embedding_dimension()
             _qdrant_service_instance = QdrantService(
                 url=settings.qdrant_url,
                 collection_name=settings.qdrant_collection,
-                embedding_provider=embeddings_service
+                embeddings=embeddings_service,
+                embedding_dimension=embedding_dimension
             )
-            logger.info(f"Qdrant service initialized: {settings.qdrant_url}")
+            logger.info(f"Qdrant service initialized: {settings.qdrant_url} (dim: {embedding_dimension})")
         except Exception as e:
             logger.error(f"Failed to initialize Qdrant service: {e}")
             # Non-critical, can continue without RAG
@@ -163,11 +162,22 @@ async def get_orchestrator(
     
     if _orchestrator_instance is None:
         try:
+            # Prepare custom prompts dict
+            custom_prompts = {}
+            if settings.agent_custom_prompt_consultant:
+                custom_prompts["consultant"] = settings.agent_custom_prompt_consultant
+            if settings.agent_custom_prompt_analysis:
+                custom_prompts["analysis"] = settings.agent_custom_prompt_analysis
+            if settings.agent_custom_prompt_trend:
+                custom_prompts["trend"] = settings.agent_custom_prompt_trend
+            
             _orchestrator_instance = AgentOrchestrator(
                 llm_provider=llm_provider,
-                rag_service=qdrant_service
+                rag_service=qdrant_service,
+                language=settings.agent_language,
+                custom_prompts=custom_prompts if custom_prompts else None
             )
-            logger.info("Agent orchestrator initialized")
+            logger.info(f"Agent orchestrator initialized (language: {settings.agent_language})")
         except Exception as e:
             logger.error(f"Failed to initialize agent orchestrator: {e}")
             raise HTTPException(
@@ -220,13 +230,13 @@ async def check_qdrant_health(qdrant_service: QdrantService = None) -> bool:
 # Cleanup on shutdown
 async def cleanup_dependencies():
     """Cleanup all singleton dependencies"""
-    global _llm_provider_instance, _embeddings_provider_instance, _qdrant_service_instance, _orchestrator_instance
+    global _llm_provider_instance, _embeddings_instance, _qdrant_service_instance, _orchestrator_instance
     
     logger.info("Cleaning up dependencies")
     
     # Reset all singletons
     _llm_provider_instance = None
-    _embeddings_provider_instance = None
+    _embeddings_instance = None
     _qdrant_service_instance = None
     _orchestrator_instance = None
     

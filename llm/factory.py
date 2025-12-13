@@ -15,6 +15,7 @@ def create_llm_provider(
     model: str,
     temperature: float = 0.7,
     embedding_model: str = "text-embedding-3-small",
+    base_url: str = "https://api.openai.com/v1",
     **kwargs
 ) -> LLMProvider:
     """
@@ -42,6 +43,7 @@ def create_llm_provider(
             model=model,
             temperature=temperature,
             embedding_model=embedding_model,
+            base_url=base_url,
             **kwargs
         )
     
@@ -77,6 +79,7 @@ def create_llm_provider_from_config(config) -> LLMProvider:
         api_key=config.llm_api_key,
         model=config.llm_model,
         temperature=config.llm_temperature,
-        embedding_model=config.embedding_model
+        embedding_model=config.embedding_model,
+        base_url=config.llm_base_url
     )
 

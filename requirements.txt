@@ -13,11 +13,13 @@ qdrant-client>=1.7.0
 # LLM and AI
 langchain>=0.1.0
 langchain-core>=0.1.0
-langchain-openai>=0.0.2
+langchain-openai>=0.0.5
+langchain-community>=0.0.10
+langchain-huggingface>=0.0.1
 langgraph>=0.0.20
 openai>=1.3.0
 
-# Embeddings
+# Embeddings (via LangChain)
 sentence-transformers>=2.2.0
 
 # HTTP client

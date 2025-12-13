@@ -19,7 +19,8 @@ class OpenAIProvider(LLMProvider):
         temperature: float = 0.7,
         embedding_model: str = "text-embedding-3-small",
         timeout: float = 60.0,
-        max_retries: int = 3
+        max_retries: int = 3,
+        base_url: str = "https://api.openai.com/v1"
     ):
         self.api_key = api_key
         self.model = model
@@ -27,7 +28,7 @@ class OpenAIProvider(LLMProvider):
         self.embedding_model = embedding_model
         self.timeout = timeout
         self.max_retries = max_retries
-        self.base_url = "https://api.openai.com/v1"
+        self.base_url = base_url
         
         self.client = httpx.AsyncClient(
             timeout=timeout,
@@ -74,7 +75,29 @@ class OpenAIProvider(LLMProvider):
                 response.raise_for_status()
                 data = response.json()
                 
-                result = data["choices"][0]["message"]["content"]
+                # Debug logging
+                logger.debug(f"API response keys: {list(data.keys())}")
+                
+                # Handle different response formats
+                if "choices" in data and len(data["choices"]) > 0:
+                    # Standard OpenAI format
+                    result = data["choices"][0]["message"]["content"]
+                elif "content" in data:
+                    # Some local APIs return direct content
+                    result = data["content"]
+                elif "response" in data:
+                    # Alternative format
+                    result = data["response"]
+                elif "message" in data:
+                    # Another alternative
+                    result = data["message"]
+                else:
+                    # Unknown format - log and raise error
+                    logger.error(f"Unexpected API response format. Keys: {list(data.keys())}, Data: {data}")
+                    raise ValueError(
+                        f"Unexpected API response format. Expected 'choices' field but got: {list(data.keys())}"
+                    )
+                
                 logger.info(f"OpenAI generate successful (attempt {attempt + 1})")
                 return result
                 
@@ -83,9 +106,17 @@ class OpenAIProvider(LLMProvider):
                 if attempt == self.max_retries - 1:
                     raise
                 continue
+            except KeyError as e:
+                logger.error(f"Missing expected field in API response: {e}")
+                logger.error(f"Response data: {data if 'data' in locals() else 'No data'}")
+                if attempt == self.max_retries - 1:
+                    raise ValueError(f"Invalid API response format: missing {e}")
+                continue
             except Exception as e:
                 logger.error(f"Unexpected error in OpenAI generate: {e}")
-                raise
+                if attempt == self.max_retries - 1:
+                    raise
+                continue
     
     async def generate_with_tools(
         self, 
@@ -125,12 +156,21 @@ class OpenAIProvider(LLMProvider):
                 response.raise_for_status()
                 data = response.json()
                 
-                message = data["choices"][0]["message"]
-                
-                result = {
-                    "content": message.get("content", ""),
-                    "tool_calls": message.get("tool_calls", [])
-                }
+                # Handle different response formats
+                if "choices" in data and len(data["choices"]) > 0:
+                    message = data["choices"][0]["message"]
+                    result = {
+                        "content": message.get("content", ""),
+                        "tool_calls": message.get("tool_calls", [])
+                    }
+                else:
+                    # Fallback for non-OpenAI compatible APIs
+                    logger.warning("API does not support tool calls format, returning simple content")
+                    content = data.get("content", data.get("response", data.get("message", "")))
+                    result = {
+                        "content": content,
+                        "tool_calls": []
+                    }
                 
                 logger.info(f"OpenAI generate_with_tools successful (attempt {attempt + 1})")
                 return result
@@ -140,9 +180,18 @@ class OpenAIProvider(LLMProvider):
                 if attempt == self.max_retries - 1:
                     raise
                 continue
+            except KeyError as e:
+                logger.error(f"Missing expected field in API response: {e}")
+                logger.error(f"Response data: {data if 'data' in locals() else 'No data'}")
+                if attempt == self.max_retries - 1:
+                    # Return fallback result
+                    return {"content": "Error: API format mismatch", "tool_calls": []}
+                continue
             except Exception as e:
                 logger.error(f"Unexpected error in OpenAI generate_with_tools: {e}")
-                raise
+                if attempt == self.max_retries - 1:
+                    raise
+                continue
     
     async def embed(self, text: str) -> List[float]:
         """Generate embeddings using OpenAI embeddings API"""

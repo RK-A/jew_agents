@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from config import settings
-from rag.embeddings import create_embedding_provider
+from rag.embedding_factory import create_embeddings_from_config
 from rag.qdrant_service import QdrantService
 
 
@@ -16,15 +16,14 @@ async def init_qdrant_collection() -> bool:
     try:
         logger.info("Initializing Qdrant collection...")
         
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         exists = await qdrant_service.collection_exists()
@@ -39,7 +38,7 @@ async def init_qdrant_collection() -> bool:
         
         if created:
             logger.info(f"Successfully created collection '{settings.qdrant_collection}'")
-            logger.info(f"Vector dimension: {embedding_provider.get_dimension()}")
+            logger.info(f"Vector dimension: {embedding_dimension}")
             return True
         
         return False
@@ -52,15 +51,14 @@ async def init_qdrant_collection() -> bool:
 async def check_qdrant_status() -> dict:
     """Check Qdrant collection status and return info"""
     try:
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         exists = await qdrant_service.collection_exists()
@@ -92,15 +90,14 @@ async def clear_qdrant_collection() -> bool:
     try:
         logger.warning("Clearing Qdrant collection...")
         
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         await qdrant_service.clear_collection()

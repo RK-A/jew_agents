@@ -6,7 +6,7 @@ from rag.init_qdrant import (
     check_qdrant_status
 )
 from rag.qdrant_service import QdrantService
-from rag.embeddings import create_embedding_provider
+from rag.embedding_factory import create_embeddings_from_config
 from config import settings
 
 
@@ -32,15 +32,14 @@ async def test_check_qdrant_status():
 async def test_qdrant_service_connection():
     """Test QdrantService connection"""
     try:
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name=settings.qdrant_collection,
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         # Try to check if collection exists (doesn't matter if it does or not)
@@ -55,21 +54,18 @@ async def test_qdrant_service_connection():
 async def test_create_embedding():
     """Test embedding creation"""
     try:
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         text = "Золотое кольцо с бриллиантом"
-        embedding = await embedding_provider.embed(text)
+        embedding = await embeddings.aembed_query(text)
         
         assert isinstance(embedding, list)
         assert len(embedding) > 0
         assert all(isinstance(x, float) for x in embedding)
         
         # Check dimension
-        dim = embedding_provider.get_dimension()
-        assert len(embedding) == dim
+        assert len(embedding) == embedding_dimension
         
     except Exception as e:
         pytest.skip(f"Embedding service not available: {e}")
@@ -79,15 +75,14 @@ async def test_create_embedding():
 async def test_qdrant_upsert_and_search():
     """Test upserting and searching in Qdrant"""
     try:
-        embedding_provider = create_embedding_provider(
-            model=settings.embedding_model,
-            api_key=settings.embedding_api_key
-        )
+        embeddings = create_embeddings_from_config(settings)
+        embedding_dimension = settings.get_embedding_dimension()
         
         qdrant_service = QdrantService(
             url=settings.qdrant_url,
             collection_name="test_collection",
-            embedding_provider=embedding_provider
+            embeddings=embeddings,
+            embedding_dimension=embedding_dimension
         )
         
         # Create test collection

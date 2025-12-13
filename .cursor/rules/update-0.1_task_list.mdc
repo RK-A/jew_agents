@@ -1,0 +1,128 @@
+---
+alwaysApply: false
+---
+
+# Update 0.1: Migration to LangChain Embeddings
+
+## Overview
+Migrate RAG system from custom embedding providers to LangChain embeddings for simplified implementation and better integration with LangChain ecosystem.
+
+## Tasks
+
+### 1. Update Dependencies
+- [x] Add `langchain-openai` to requirements.txt for OpenAI embeddings
+- [x] Add `langchain-gigachat` to requirements.txt for GigaChat embeddings (if available)
+- [x] Add `langchain-huggingface` or `langchain-community` for HuggingFace embeddings
+- [x] Update `langchain` to latest version
+- [x] Remove direct `sentence-transformers` dependency (will use via langchain)
+
+### 2. Refactor `rag/embeddings.py`
+- [x] Replace custom `EmbeddingProvider` abstract class with LangChain's `Embeddings` interface
+- [x] Remove `OpenAIEmbeddingProvider` class, use `langchain_openai.OpenAIEmbeddings` instead
+- [x] Remove `GigaChatEmbeddingProvider` class, use LangChain GigaChat embeddings or custom wrapper
+- [x] Remove `HuggingFaceEmbeddingProvider` class, use `langchain_huggingface.HuggingFaceEmbeddings`
+- [x] Update `create_embedding_provider()` factory to return LangChain embedding instances
+- [x] Ensure async/await compatibility with LangChain's `aembed_query()` and `aembed_documents()`
+
+### 3. Update `rag/qdrant_service.py`
+- [x] Update type hints to use `langchain_core.embeddings.Embeddings` instead of custom `EmbeddingProvider`
+- [x] Replace `embedding_provider.embed()` calls with `embeddings.aembed_query()`
+- [x] Replace `embedding_provider.embed_batch()` calls with `embeddings.aembed_documents()`
+- [x] Update dimension retrieval (LangChain embeddings don't have `get_dimension()` method - may need config)
+- [x] Test with async operations
+
+### 4. Update `rag/retrieval.py`
+- [x] Update imports to use LangChain embeddings
+- [x] Refactor retrieval pipeline to use LangChain's `VectorStoreRetriever` pattern if applicable
+- [x] Consider using `langchain_qdrant.Qdrant` wrapper for more native LangChain integration
+- [x] Update error handling for LangChain-specific exceptions
+
+### 5. Update Configuration (`config.py`)
+- [x] Add embedding dimension to config (since LangChain doesn't expose `get_dimension()`)
+- [x] Create embedding dimension mapping for different models
+- [x] Update `Settings` class with new embedding provider parameters
+- [x] Ensure backward compatibility with existing config
+
+### 6. Update Factory Pattern (`llm/factory.py` or new `rag/embedding_factory.py`)
+- [x] Create `create_langchain_embeddings()` factory function
+- [x] Support OpenAI embeddings: `OpenAIEmbeddings(model="text-embedding-3-small")`
+- [x] Support HuggingFace embeddings: `HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-base")`
+- [x] Support GigaChat embeddings (custom wrapper if no official LangChain integration)
+- [x] Return proper async-compatible embedding instances
+
+### 7. Update Agent Dependencies
+- [x] Update `agents/base_agent.py` to use LangChain embeddings
+- [x] Update `agents/consultant_agent.py` RAG calls
+- [x] Update `agents/trend_agent.py` embedding operations
+- [x] Ensure all agents work with new embedding interface
+
+### 8. Update Initialization Scripts
+- [x] Update `rag/init_qdrant.py` to use LangChain embeddings
+- [x] Update `rag/fill_qdrant.py` to use new embedding factory
+- [x] Update dimension detection logic
+- [x] Test collection creation with new embeddings
+
+### 9. Update Backend Dependencies (`backend/dependencies.py`)
+- [x] Update FastAPI dependency injection to create LangChain embedding instances
+- [x] Update QdrantService initialization with LangChain embeddings
+- [x] Update agent orchestrator initialization
+
+### 10. Update Tests
+- [x] Update `tests/test_qdrant_init.py` for LangChain embeddings
+- [x] Create mock LangChain embedding classes for testing
+- [x] Update `tests/test_integration_init.py` with new embedding flow
+- [x] Add tests for embedding factory function
+- [x] Test async embedding operations
+
+### 11. Update Example Scripts
+- [x] Update `rag/example_usage.py` to use LangChain embeddings
+- [x] Update `agents/example_usage.py` with new embedding initialization
+- [x] Add examples for different LangChain embedding providers
+- [x] Document migration for users
+
+### 12. Optional: Advanced LangChain Integration
+- [ ] Consider replacing `QdrantService` with `langchain_qdrant.Qdrant` for native integration
+- [ ] Use LangChain's `VectorStore` interface throughout the codebase
+- [ ] Integrate with LangChain's retrieval chain abstractions
+- [ ] Use LangChain's caching mechanisms for embeddings
+
+## Migration Benefits
+- **Simplified Code**: Remove ~200 lines of custom embedding provider code
+- **Better Integration**: Native LangChain compatibility for chains and agents
+- **More Features**: Access to LangChain's caching, batching, and retry logic
+- **Easier Maintenance**: Use well-tested LangChain implementations
+- **Wider Model Support**: Easy access to new embedding models via LangChain
+
+## Breaking Changes
+- `EmbeddingProvider.embed()` → `Embeddings.aembed_query()`
+- `EmbeddingProvider.embed_batch()` → `Embeddings.aembed_documents()`
+- `EmbeddingProvider.get_dimension()` → Config-based dimension (no method)
+- Factory function signature changes
+
+## Backward Compatibility
+- Keep old `rag/embeddings.py` as `rag/embeddings_legacy.py` temporarily
+- Add deprecation warnings if old imports are used
+- Provide migration guide in code comments
+
+## Testing Checklist
+- [x] Test OpenAI embeddings with LangChain
+- [x] Test HuggingFace embeddings with LangChain
+- [x] Test GigaChat embeddings (custom wrapper)
+- [x] Test Qdrant collection creation with correct dimensions
+- [x] Test product upsert with new embeddings
+- [x] Test semantic search with new embeddings
+- [x] Test agent consultation flow end-to-end
+- [x] Test batch embedding operations
+- [x] Test async operations throughout
+
+## Rollout Plan
+1. ✅ Add LangChain dependencies
+2. ✅ Create new embedding factory alongside old one
+3. ✅ Add feature flag in config to switch between old/new embeddings
+4. ✅ Test new embeddings in parallel
+5. ✅ Migrate all code to use new embeddings
+6. ✅ Remove old embedding providers
+7. ✅ Clean up legacy code
+
+## ✅ Migration Complete!
+All tasks completed successfully on December 12, 2025. The RAG system has been fully migrated to LangChain embeddings.

@@ -10,7 +10,7 @@ from agents.base_agent import BaseAgent
 class TrendAgent(BaseAgent):
     """Agent for analyzing fashion trends from journals and articles"""
     
-    SYSTEM_PROMPT = """You are a fashion trend analyst specializing in jewelry and accessories.
+    DEFAULT_SYSTEM_PROMPT = """You are a fashion trend analyst specializing in jewelry and accessories.
 Your role is to analyze fashion journals, identify emerging trends, and provide insights for product development.
 
 When analyzing fashion content, focus on:
@@ -312,7 +312,9 @@ JSON:"""
 {json.dumps(recommendations, indent=2, ensure_ascii=False)}
 """
             
-            prompt = f"""{self.SYSTEM_PROMPT}
+            system_prompt = self.get_system_prompt(self.DEFAULT_SYSTEM_PROMPT)
+            
+            prompt = f"""{system_prompt}
 
 Based on fashion journal analysis, generate a comprehensive trend report:
 
