@@ -71,6 +71,29 @@ class LocalAPIEmbeddings(Embeddings):
                 raise
             except httpx.RequestError as e:
                 logger.error(f"Request error to local API: {e}")
+                # If we were connecting to localhost inside a Docker container, try host.docker.internal as a fallback.
+                if "localhost" in self.base_url or "127.0.0.1" in self.base_url:
+                    fallback_base = self.base_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+                    fallback_url = f"{fallback_base}/embeddings" if not fallback_base.endswith('/embeddings') else fallback_base
+                    logger.warning(f"Retrying embeddings request using fallback URL: {fallback_url}")
+                    try:
+                        response = await client.post(
+                            fallback_url,
+                            headers={"Content-Type": "application/json"},
+                            json={"model": self.model, "input": texts},
+                            timeout=self.timeout
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        embeddings = [item["embedding"] for item in data["data"]]
+                        logger.debug(f"Generated {len(embeddings)} embeddings via local API (fallback)")
+                        return embeddings
+                    except Exception as e2:
+                        logger.error(f"Request error to local API using fallback: {e2}")
+                        raise ConnectionError(
+                            f"Failed to connect to local embedding API at {self.embeddings_url} and fallback {fallback_url}. "
+                            f"Make sure the server is running and the model is loaded."
+                        )
                 raise ConnectionError(
                     f"Failed to connect to local embedding API at {self.embeddings_url}. "
                     f"Make sure the server is running and the model is loaded."

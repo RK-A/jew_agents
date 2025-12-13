@@ -30,13 +30,35 @@ class OpenAIProvider(LLMProvider):
         self.max_retries = max_retries
         self.base_url = base_url
         
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
         self.client = httpx.AsyncClient(
             timeout=timeout,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
+            headers=headers
         )
+
+    async def _post_with_fallback(self, path: str, payload: dict) -> httpx.Response:
+        """Post payload to base_url + path; on connect failure, retry using host.docker.internal fallback once."""
+        tried_fallback = False
+        url = f"{self.base_url.rstrip('/')}{path}"
+        for _ in range(2):
+            try:
+                response = await self.client.post(url, json=payload)
+                response.raise_for_status()
+                return response
+            except httpx.RequestError as e:
+                logger.error(f"Request error to OpenAI/Local API at {url}: {e}")
+                if (not tried_fallback) and ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
+                    fallback_base = self.base_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+                    url = f"{fallback_base.rstrip('/')}{path}"
+                    tried_fallback = True
+                    logger.warning(f"Retrying request using fallback base URL: {fallback_base}")
+                    continue
+                raise
     
     async def generate(
         self, 
@@ -68,10 +90,7 @@ class OpenAIProvider(LLMProvider):
         
         for attempt in range(self.max_retries):
             try:
-                response = await self.client.post(
-                    f"{self.base_url}/chat/completions",
-                    json=payload
-                )
+                response = await self._post_with_fallback("/chat/completions", payload)
                 response.raise_for_status()
                 data = response.json()
                 
@@ -149,10 +168,7 @@ class OpenAIProvider(LLMProvider):
         
         for attempt in range(self.max_retries):
             try:
-                response = await self.client.post(
-                    f"{self.base_url}/chat/completions",
-                    json=payload
-                )
+                response = await self._post_with_fallback("/chat/completions", payload)
                 response.raise_for_status()
                 data = response.json()
                 
@@ -203,10 +219,7 @@ class OpenAIProvider(LLMProvider):
         
         for attempt in range(self.max_retries):
             try:
-                response = await self.client.post(
-                    f"{self.base_url}/embeddings",
-                    json=payload
-                )
+                response = await self._post_with_fallback("/embeddings", payload)
                 response.raise_for_status()
                 data = response.json()
                 
