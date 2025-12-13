@@ -1,243 +1,177 @@
 # AI Jewelry Consultation System
 
-Production-ready multi-agent AI system for jewelry consultation with RAG and LLM integration.
+Multi-agent AI system for jewelry consultation with RAG and LLM integration.
 
-## 🎯 Overview
+## 🎯 Features
 
-An intelligent jewelry consultation system powered by AI agents that provides personalized recommendations, analyzes customer preferences, and tracks fashion trends.
-
-### Key Features
-
-- **Multi-Agent Architecture**: Specialized agents for consultation, analytics, and trend analysis
-- **Flexible LLM Integration**: Support for OpenAI and GigaChat with runtime provider selection
-- **LangChain RAG System**: Semantic search using Qdrant vector database with LangChain embeddings
-- **Multiple Embedding Providers**: OpenAI, HuggingFace (local/free), GigaChat, and Local API (LM Studio, LocalAI)
-- **Fully Local Option**: Run embeddings completely offline with local models
-- **PostgreSQL Database**: Structured data storage for products, customers, and consultations
-- **FastAPI REST API**: Modern async API with automatic documentation
-- **Docker Deployment**: One-command deployment with Docker Compose
-- **Production-Ready**: Full error handling, logging, and monitoring
-
-## 📊 Project Stats
-
-- **46 Python files** with **7000+ lines of code**
-- **8 API endpoints** with full OpenAPI documentation
-- **3 AI agents** with specialized capabilities
-- **2 LLM providers** (OpenAI, GigaChat)
-- **4 embedding providers** (OpenAI, HuggingFace, GigaChat, Local API) with 10+ models
-- **Fully local embeddings** support (LM Studio, LocalAI)
-- **LangChain-powered** RAG system for better integration
-- **Comprehensive test suite** with 20+ tests
-- **100% async/await** implementation
+- **3 AI Agents**: Consultation, Analytics, Trend Analysis
+- **LLM Providers**: OpenAI, GigaChat (runtime selection)
+- **Embeddings**: OpenAI, HuggingFace, GigaChat, Local API (LM Studio/LocalAI)
+- **RAG System**: Semantic search with Qdrant + LangChain
+- **Database**: PostgreSQL for products, customers, consultations
+- **API**: FastAPI with async/await, auto-docs
+- **Deploy**: Docker Compose
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Docker & Docker Compose
-- API keys for LLM provider (OpenAI or GigaChat)
-
-### Installation
+### 1. Setup
 
 ```bash
-# 1. Clone and configure
+# Clone and configure
 git clone <repository-url>
 cd agents
 cp env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (LLM_API_KEY, etc.)
 
-# 2. Start services
+# Start all services
 docker-compose up -d
-
-# 3. Initialize and fill with test data
-docker-compose exec backend python scripts/manage_data.py init
-docker-compose exec backend python scripts/manage_data.py fill --products 80 --users 25
-docker-compose exec backend python scripts/manage_data.py sync
-
-# 4. Verify installation
-docker-compose exec backend python scripts/verify_installation.py
-
-# 5. Access API
-open http://localhost:8000/docs
 ```
 
-### Alternative: Auto-Fill on Startup
+### 2. Initialize
+
+```bash
+# Initialize database and Qdrant
+docker-compose exec backend python scripts/manage_data.py init
+
+# Fill with test data
+docker-compose exec backend python scripts/manage_data.py fill --products 80 --users 25
+
+# Sync to Qdrant
+docker-compose exec backend python scripts/manage_data.py sync
+
+# Verify
+docker-compose exec backend python scripts/verify_installation.py
+```
+
+### 3. Access
+
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/api/health
+- **Qdrant Dashboard**: http://localhost:6333/dashboard
+
+### Alternative: Auto-Fill
 
 Set `AUTO_FILL_DATA=true` in `.env` and restart:
 ```bash
 docker-compose restart backend
 ```
 
-## 📚 Documentation
+## 📡 API Endpoints
 
-- **LOCAL_EMBEDDINGS_GUIDE.md** - 🆕 **Guide for local embeddings (LM Studio, LocalAI)**
-- **QUICKSTART_LOCAL_API.txt** - 🆕 **Quick start for local embeddings (3 min)**
-- **INSTALL.md** - Complete installation guide with embedding setup
-- **MIGRATION_LANGCHAIN.md** - LangChain embeddings migration guide
-- **QUICKSTART.txt** - Detailed setup guide
-- **DEPLOYMENT.txt** - Production deployment guide
-- **PROJECT_STATUS.txt** - Complete project status and features
-- **env.example** - Environment configuration template with embedding examples
-- **API Docs** - Available at `http://localhost:8000/docs` when running
-
-## 🏗️ Architecture
-
-```
-FastAPI Backend → Agent Orchestrator → [LLM + RAG + PostgreSQL]
-                                      ↓
-                  3 Agents (Consultant, Analysis, Trend)
-```
-
-### Components
-
-- **Consultant Agent**: Personalized jewelry recommendations
-- **Analysis Agent**: Customer preference analytics and demand forecasting
-- **Trend Agent**: Fashion trend analysis from journal content
-- **RAG System**: LangChain-powered semantic search with Qdrant
-- **Embedding Providers**: OpenAI, HuggingFace (free), GigaChat, Local API (LM Studio/LocalAI)
-- **Fully Local Option**: Run embeddings offline with local models
-- **LLM Providers**: OpenAI and GigaChat support
-- **Database**: PostgreSQL for structured data
-
-## 🔌 API Endpoints
-
-- `POST /api/consultation/{user_id}` - Get jewelry recommendations
-- `GET /api/customer/{user_id}/profile` - Get customer profile
+- `POST /api/consultation/{user_id}` - Jewelry recommendations
+- `GET /api/customer/{user_id}/profile` - Customer profile
 - `PUT /api/customer/{user_id}/preferences` - Update preferences
-- `POST /api/products/search` - Semantic product search
-- `POST /api/analysis/customer` - Run customer analytics
-- `POST /api/analysis/trends` - Analyze fashion trends
-- `GET /api/health` - System health check
-- `GET /docs` - Interactive API documentation
+- `POST /api/products/search` - Semantic search
+- `POST /api/analysis/customer` - Customer analytics
+- `POST /api/analysis/trends` - Trend analysis
+- `GET /api/health` - Health check
 
-## 🛠️ CLI Tools
+**Example**:
+```bash
+curl -X POST "http://localhost:8000/api/consultation/user_001" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "I need a gold ring for engagement"}'
+```
+
+## 🛠️ Management Commands
 
 ```bash
-# Installation
-python scripts/install_embeddings.py     # Install embedding dependencies
-
 # Data management
-python scripts/manage_data.py init       # Initialize database and Qdrant
-python scripts/manage_data.py fill       # Generate test data
-python scripts/manage_data.py sync       # Sync PostgreSQL to Qdrant
-python scripts/manage_data.py status     # Check system status
-python scripts/manage_data.py clear      # Clear all data
-python scripts/manage_data.py reset      # Full system reset
+python scripts/manage_data.py init      # Initialize DB + Qdrant
+python scripts/manage_data.py fill      # Generate test data
+python scripts/manage_data.py sync      # Sync to Qdrant
+python scripts/manage_data.py status    # Check status
+python scripts/manage_data.py clear     # Clear all data
+python scripts/manage_data.py reset     # Full reset
+
+# Embeddings
+python scripts/install_embeddings.py    # Install embedding deps
 
 # Verification
-python scripts/verify_installation.py    # Verify installation
+python scripts/verify_installation.py   # Verify setup
 
 # API testing
-./scripts/quick_api_test.sh             # Quick API test
-./scripts/test_api.sh                   # Comprehensive API test
+./scripts/quick_api_test.sh            # Quick test
+./scripts/test_api.sh                  # Full test
 ```
 
 ## 🧪 Testing
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test files
-pytest tests/test_api_endpoints.py -v
-pytest tests/test_database_init.py -v
-pytest tests/test_data_generation.py -v
+pytest tests/ -v                        # All tests
+pytest tests/test_api_endpoints.py -v  # API tests
+pytest tests/test_database_init.py -v  # DB tests
 ```
 
-## 📁 Project Structure
+## 📁 Structure
 
 ```
-agents/                        # AI agent implementations
-backend/                       # FastAPI routes and schemas
-database/                      # PostgreSQL models and repositories
-llm/                           # LLM provider abstraction
-rag/                           # RAG system with Qdrant
-  ├── embedding_factory.py     # LangChain embedding factory
-  ├── gigachat_embeddings.py   # Custom GigaChat wrapper
-  ├── qdrant_service.py        # Qdrant operations
-  └── retrieval.py             # RAG retrieval pipeline
-scripts/                       # CLI management tools
-  ├── install_embeddings.py    # Embedding installation script
-  └── manage_data.py           # Data management CLI
-tests/                         # Test suite
-utils/                         # Logging and utilities
-config.py                      # Configuration settings
-main.py                        # FastAPI application
-INSTALL.md                     # Installation guide
-MIGRATION_LANGCHAIN.md         # Migration documentation
+├── agents/           # AI agents (consultant, analysis, trend)
+├── backend/          # FastAPI routes, schemas
+├── database/         # PostgreSQL models, repositories
+├── llm/              # LLM providers (openai, gigachat)
+├── rag/              # RAG system (qdrant, embeddings)
+├── scripts/          # CLI tools
+├── tests/            # Test suite
+├── config.py         # Configuration
+└── main.py           # Entry point
 ```
 
 ## ⚙️ Configuration
 
-All configuration via environment variables in `.env`:
+Environment variables in `.env`:
 
 ```bash
-# LLM Provider
-LLM_PROVIDER=openai
+# LLM
+LLM_PROVIDER=openai              # openai or gigachat
 LLM_MODEL=gpt-4
 LLM_API_KEY=your_key
+LLM_BASE_URL=                    # Optional: http://host.docker.internal:1234/v1 for local
+
+# Embeddings
+EMBEDDING_PROVIDER=openai        # openai, huggingface, gigachat, local
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_API_KEY=your_key
+EMBEDDING_BASE_URL=              # Optional: http://host.docker.internal:1234/v1 for local
 
 # Database
 POSTGRES_URL=postgresql+asyncpg://...
 
 # Qdrant
 QDRANT_URL=http://localhost:6333
-
-# Embeddings
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_API_KEY=your_key
 ```
 
 See `env.example` for all options.
 
+## 📚 Documentation
+
+- **CLAUDE.md** - Development guide (architecture, stack, rules)
+- **INSTALL.md** - Installation guide with embeddings
+- **MIGRATION_LANGCHAIN.md** - LangChain embeddings migration
+- **env.example** - Configuration template
+
 ## 🐳 Docker Services
 
-- **postgres**: PostgreSQL 16 database
-- **qdrant**: Qdrant vector database
-- **backend**: FastAPI application
+- `postgres` - PostgreSQL 16
+- `qdrant` - Qdrant vector DB
+- `backend` - FastAPI app
 
 ## 📈 Monitoring
 
-- Health endpoint: `GET /api/health`
-- System status: `python scripts/manage_data.py status`
+- Health: `GET /api/health`
+- Status: `python scripts/manage_data.py status`
 - Logs: `docker-compose logs -f backend`
-- Qdrant dashboard: `http://localhost:6333/dashboard`
-
-## 🔒 Security
-
-- API keys via environment variables
-- No credentials in code
-- Input validation with Pydantic
-- SQL injection protection with SQLAlchemy
-- CORS configuration
-- SSL/TLS ready for production
-
-## 🚢 Production Deployment
-
-See `DEPLOYMENT.txt` for detailed production deployment instructions including:
-- Cloud platform deployment (AWS, GCP, Azure)
-- Nginx reverse proxy setup
-- SSL certificate configuration
-- Monitoring and logging
-- Backup and recovery
-- Scaling strategies
+- Qdrant UI: http://localhost:6333/dashboard
 
 ## 🤝 Contributing
 
-The project follows clean code principles:
+Clean code principles:
 - Type hints everywhere
 - Async/await throughout
 - Comprehensive error handling
 - Structured logging
 - Full test coverage
-- Detailed documentation
-
-## 📝 License
-
-Proprietary - All rights reserved
 
 ## 🎉 Status
 
-**✅ COMPLETE AND PRODUCTION-READY**
-
-All planned features implemented and tested. Ready for deployment!
+**✅ PRODUCTION-READY** - All features implemented and tested!
