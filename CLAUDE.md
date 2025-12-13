@@ -51,7 +51,6 @@ User Query → Embed → Vector Search → Retrieve Products → Augment LLM Con
 │   ├── __init__.py
 │   ├── routes.py
 │   └── schemas.py
-├── COMPLETION_SUMMARY.txt
 ├── config.py
 ├── database
 │   ├── fill_data.py
@@ -60,7 +59,6 @@ User Query → Embed → Vector Search → Retrieve Products → Augment LLM Con
 │   ├── models.py
 │   ├── repositories.py
 │   └── session.py
-├── DEPLOYMENT.txt
 ├── docker-compose.yml
 ├── Dockerfile
 ├── env.example
@@ -71,10 +69,7 @@ User Query → Embed → Vector Search → Retrieve Products → Augment LLM Con
 │   ├── __init__.py
 │   └── openai_provider.py
 ├── main.py
-├── PROJECT_FILES.txt
-├── PROJECT_STATUS.txt
 ├── pytest.ini
-├── QUICKSTART.txt
 ├── rag
 │   ├── embeddings.py
 │   ├── example_usage.py
@@ -84,6 +79,7 @@ User Query → Embed → Vector Search → Retrieve Products → Augment LLM Con
 │   ├── qdrant_service.py
 │   └── retrieval.py
 ├── README.md
+├── CLAUDE.md
 ├── requirements.txt
 ├── scripts
 │   ├── __init__.py
