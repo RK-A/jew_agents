@@ -20,13 +20,14 @@ def event_loop():
 async def setup_test_database():
     """Setup test database (session scope)"""
     from database.init_db import create_tables, check_connection
+    from database.init_db import drop_tables
     
     # Check connection
     connected = await check_connection()
     if not connected:
         pytest.skip("Database not available")
     
-    # Create tables
+    await drop_tables()
     await create_tables()
     
     yield

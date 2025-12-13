@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timedelta
 from typing import List
 from faker import Faker
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from database.session import async_session
 from database.models import JewelryProduct, CustomerPreference, ConsultationRecord
@@ -215,9 +215,9 @@ async def clear_all_data():
     
     async with async_session() as session:
         # Delete in correct order due to foreign keys
-        await session.execute("DELETE FROM consultation_records")
-        await session.execute("DELETE FROM customer_preferences")
-        await session.execute("DELETE FROM jewelry_products")
+        await session.execute(text("DELETE FROM consultation_records"))
+        await session.execute(text("DELETE FROM customer_preferences"))
+        await session.execute(text("DELETE FROM jewelry_products"))
         await session.commit()
     
     logger.info("All data cleared successfully")

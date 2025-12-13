@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, JSON, ARRAY, DateTime, Text
+from sqlalchemy import Column, String, Integer, Float, JSON, ARRAY, DateTime, Text, Identity
 from sqlalchemy.sql import func
 from datetime import datetime
 
@@ -9,7 +9,7 @@ class JewelryProduct(Base):
     """Jewelry products inventory table"""
     __tablename__ = "jewelry_products"
     
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, Identity(start=1, cycle=False), primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String, nullable=False, index=True)  # rings, necklaces, bracelets, earrings, pendants
@@ -43,7 +43,7 @@ class ConsultationRecord(Base):
     """Consultation history records table"""
     __tablename__ = "consultation_records"
     
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, Identity(start=1, cycle=False), primary_key=True, index=True)
     user_id = Column(String, nullable=False, index=True)
     agent_type = Column(String, nullable=False)  # consultant, analysis, trend
     message = Column(Text, nullable=False)  # user message

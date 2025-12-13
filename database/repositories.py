@@ -23,7 +23,7 @@ class JewelryProductRepository:
         logger.info(f"Created product: {product.id}")
         return product
     
-    async def get_by_id(self, product_id: str) -> Optional[JewelryProduct]:
+    async def get_by_id(self, product_id: int) -> Optional[JewelryProduct]:
         """Get product by ID"""
         result = await self.session.execute(
             select(JewelryProduct).where(JewelryProduct.id == product_id)
@@ -44,7 +44,7 @@ class JewelryProductRepository:
         )
         return list(result.scalars().all())
     
-    async def update(self, product_id: str, update_data: Dict[str, Any]) -> Optional[JewelryProduct]:
+    async def update(self, product_id: int, update_data: Dict[str, Any]) -> Optional[JewelryProduct]:
         """Update product"""
         await self.session.execute(
             update(JewelryProduct)
@@ -54,7 +54,7 @@ class JewelryProductRepository:
         await self.session.flush()
         return await self.get_by_id(product_id)
     
-    async def delete(self, product_id: str) -> bool:
+    async def delete(self, product_id: int) -> bool:
         """Delete product"""
         result = await self.session.execute(
             delete(JewelryProduct).where(JewelryProduct.id == product_id)
@@ -148,7 +148,7 @@ class ConsultationRecordRepository:
         logger.info(f"Created consultation record: {record.id} for user: {record.user_id}")
         return record
     
-    async def get_by_id(self, record_id: str) -> Optional[ConsultationRecord]:
+    async def get_by_id(self, record_id: int) -> Optional[ConsultationRecord]:
         """Get consultation record by ID"""
         result = await self.session.execute(
             select(ConsultationRecord).where(ConsultationRecord.id == record_id)
@@ -175,7 +175,7 @@ class ConsultationRecordRepository:
         )
         return list(result.scalars().all())
     
-    async def delete(self, record_id: str) -> bool:
+    async def delete(self, record_id: int) -> bool:
         """Delete consultation record"""
         result = await self.session.execute(
             delete(ConsultationRecord).where(ConsultationRecord.id == record_id)

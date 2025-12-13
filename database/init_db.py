@@ -75,7 +75,33 @@ async def init_database():
     if not await check_connection():
         raise Exception("Failed to connect to database")
     
-    await create_tables()
+    # Create database tables - if schema mismatch is detected (e.g. id column type changed),
+    # drop and recreate tables to avoid conflicts during inserts (useful during development).
+    logger.info("Ensuring database schema is up-to-date")
+    # Check if jewelry_products.id is an identity/serial column
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT is_identity FROM information_schema.columns WHERE table_name='jewelry_products' AND column_name='id'"))
+            row = result.fetchone()
+            needs_recreate = False
+            if row is None:
+                logger.info("Table jewelry_products or column id not found; will create tables")
+                needs_recreate = True
+            else:
+                is_identity = row[0]  # 'YES' or 'NO'
+                if is_identity != 'YES':
+                    logger.info("Detected jewelry_products.id is not identity; will recreate tables to apply schema changes")
+                    needs_recreate = True
+            if needs_recreate:
+                logger.warning("Dropping and recreating tables (development operation)")
+                await conn.run_sync(Base.metadata.drop_all)
+                await conn.run_sync(Base.metadata.create_all)
+            else:
+                await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        # If anything goes wrong with checking schema, fall back to create_tables
+        logger.exception("Error checking existing schema; proceeding to create tables")
+        await create_tables()
     
     counts = await get_table_counts()
     logger.info(f"Database status: {counts}")

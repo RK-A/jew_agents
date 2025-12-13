@@ -81,10 +81,10 @@ def main():
     )
     
     # Step 4: Install sentence transformers
-    run_command(
-        [sys.executable, "-m", "pip", "install", "sentence-transformers>=2.2.0"],
-        "Step 4: Installing sentence-transformers"
-    )
+    # run_command(
+    #     [sys.executable, "-m", "pip", "install", "sentence-transformers>=2.2.0"],
+    #     "Step 4: Installing sentence-transformers"
+    # )
     
     # Step 5: Install LangChain community
     run_command(
