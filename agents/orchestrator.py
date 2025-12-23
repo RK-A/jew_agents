@@ -50,9 +50,7 @@ class AgentOrchestrator:
         
         self.analysis_agent = AnalysisAgent(
             llm_provider=llm_provider,
-            rag_service=None,  # Analysis agent doesn't need RAG
-            language=language,
-            custom_system_prompt=self.custom_prompts.get("analysis")
+            language=language
         )
         
         self.trend_agent = TrendAgent(
