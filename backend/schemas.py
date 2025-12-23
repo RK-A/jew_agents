@@ -35,6 +35,31 @@ class ConsultationResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 
+# Girlfriend chat schemas
+class GirlfriendChatRequest(BaseModel):
+    """Request schema for girlfriend chat endpoint"""
+
+    message: str = Field(..., description="Сообщение пользователя")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Опциональная история диалога в формате [{'role': 'user'|'assistant', 'content': '...'}]"
+    )
+    zodiac_sign: Optional[str] = Field(
+        None,
+        description="Опционально: знак зодиака (aries/taurus/...); если неизвестен — можно не передавать"
+    )
+
+
+class GirlfriendChatResponse(BaseModel):
+    """Response schema for girlfriend chat endpoint"""
+
+    status: str = Field(..., description="Status: success or error")
+    agent: str = Field("girlfriend", description="Agent type used")
+    response: Optional[str] = Field(None, description="Ответ агента")
+    zodiac_sign: Optional[str] = Field(None, description="Определённый/использованный знак зодиака")
+    error: Optional[str] = Field(None, description="Error message if status is error")
+
+
 # Customer profile schemas
 class CustomerProfileResponse(BaseModel):
     """Response schema for customer profile"""

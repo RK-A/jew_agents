@@ -14,14 +14,14 @@ workflow = StateGraph(TrendState)
 workflow.add_node("extract", extraction_node)
 workflow.add_node("analyze", analysis_node)
 workflow.add_node("calculate", calculation_node)
-workflow.add_node("report", reporting_node)
+workflow.add_node("report_node", reporting_node)
 
 # Связи (последовательные)
 workflow.add_edge(START, "extract")
 workflow.add_edge("extract", "analyze")
 workflow.add_edge("analyze", "calculate")
-workflow.add_edge("calculate", "report")
-workflow.add_edge("report", END)
+workflow.add_edge("calculate", "report_node")
+workflow.add_edge("report_node", END)
 
 # Компиляция
 graph = workflow.compile()
