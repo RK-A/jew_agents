@@ -1,16 +1,23 @@
-"""Customer analysis agent for market insights and demand forecasting"""
+"""Customer analysis agent for market insights and demand forecasting using LangGraph"""
 
+import logging
 from typing import Dict, Any, List
 from collections import Counter
 from datetime import datetime
 
+from langgraph.graph import StateGraph, END
+
 from agents.base_agent import BaseAgent
+from agents.graph_states import AnalysisState
 from database.session import async_session_factory
 from database.repositories import CustomerPreferenceRepository, ConsultationRecordRepository
 
 
+logger = logging.getLogger(__name__)
+
+
 class AnalysisAgent(BaseAgent):
-    """Agent for analyzing customer preferences and forecasting demand"""
+    """Agent for analyzing customer preferences and forecasting demand using LangGraph"""
     
     DEFAULT_SYSTEM_PROMPT = """You are a market analyst specializing in jewelry retail and customer behavior.
 Your role is to analyze customer preferences, identify trends, and provide actionable insights for business decisions.
@@ -30,9 +37,36 @@ Provide clear, data-driven insights with specific recommendations for:
 - Pricing strategies
 """
     
+    def __init__(self, llm_provider, rag_service=None, language: str = "auto", custom_system_prompt: str = None):
+        super().__init__(llm_provider, rag_service, language, custom_system_prompt)
+        self.graph = self._build_graph()
+    
+    def _build_graph(self) -> StateGraph:
+        """Build LangGraph workflow for analysis process"""
+        workflow = StateGraph(AnalysisState)
+        
+        # Add nodes
+        workflow.add_node("load_data", self._load_data_node)
+        workflow.add_node("analyze_patterns", self._analyze_patterns_node)
+        workflow.add_node("analyze_consultations", self._analyze_consultations_node)
+        workflow.add_node("forecast_demand", self._forecast_demand_node)
+        workflow.add_node("identify_segments", self._identify_segments_node)
+        workflow.add_node("generate_report", self._generate_report_node)
+        
+        # Define edges
+        workflow.set_entry_point("load_data")
+        workflow.add_edge("load_data", "analyze_patterns")
+        workflow.add_edge("analyze_patterns", "analyze_consultations")
+        workflow.add_edge("analyze_consultations", "forecast_demand")
+        workflow.add_edge("forecast_demand", "identify_segments")
+        workflow.add_edge("identify_segments", "generate_report")
+        workflow.add_edge("generate_report", END)
+        
+        return workflow.compile()
+    
     async def process(self) -> Dict[str, Any]:
         """
-        Process customer analysis
+        Process customer analysis using LangGraph workflow
         
         Returns:
             Dict with analysis results, trends, and recommendations
@@ -40,43 +74,43 @@ Provide clear, data-driven insights with specific recommendations for:
         try:
             self.logger.info("Starting customer analysis...")
             
-            # 1. Get all customer preferences
-            all_preferences = await self._get_all_customer_preferences()
+            # Initialize state
+            initial_state: AnalysisState = {
+                "customer_preferences": [],
+                "consultation_records": [],
+                "patterns": {},
+                "consultation_stats": {},
+                "demand_forecast": {},
+                "customer_segments": [],
+                "report": "",
+                "error": None,
+                "step": "start"
+            }
             
-            if not all_preferences:
+            # Run graph
+            final_state = await self.graph.ainvoke(initial_state)
+            
+            # Return result
+            if final_state.get("error"):
+                return {
+                    "status": "error",
+                    "message": final_state["error"]
+                }
+            
+            if not final_state["customer_preferences"]:
                 return {
                     "status": "no_data",
                     "message": "No customer data available for analysis"
                 }
             
-            # 2. Analyze preference patterns
-            patterns = await self._analyze_patterns(all_preferences)
-            
-            # 3. Get consultation history
-            consultation_stats = await self._analyze_consultation_history()
-            
-            # 4. Generate demand forecast
-            demand_forecast = await self._forecast_demand(patterns)
-            
-            # 5. Identify customer segments
-            segments = await self._identify_segments(all_preferences)
-            
-            # 6. Generate insights via LLM
-            report = await self._generate_analysis_report(
-                patterns=patterns,
-                consultation_stats=consultation_stats,
-                demand_forecast=demand_forecast,
-                segments=segments
-            )
-            
             return {
                 "status": "success",
-                "report": report,
-                "patterns": patterns,
-                "consultation_stats": consultation_stats,
-                "demand_forecast": demand_forecast,
-                "customer_segments": segments,
-                "total_customers": len(all_preferences),
+                "report": final_state["report"],
+                "patterns": final_state["patterns"],
+                "consultation_stats": final_state["consultation_stats"],
+                "demand_forecast": final_state["demand_forecast"],
+                "customer_segments": final_state["customer_segments"],
+                "total_customers": len(final_state["customer_preferences"]),
                 "generated_at": datetime.utcnow().isoformat()
             }
         
@@ -86,6 +120,77 @@ Provide clear, data-driven insights with specific recommendations for:
                 "status": "error",
                 "message": str(e)
             }
+    
+    async def _load_data_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Load customer preferences and consultation records"""
+        try:
+            preferences = await self._get_all_customer_preferences()
+            state["customer_preferences"] = preferences
+            state["step"] = "data_loaded"
+        except Exception as e:
+            logger.error(f"Error loading data: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _analyze_patterns_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Analyze customer preference patterns"""
+        try:
+            patterns = await self._analyze_patterns(state["customer_preferences"])
+            state["patterns"] = patterns
+            state["step"] = "patterns_analyzed"
+        except Exception as e:
+            logger.error(f"Error analyzing patterns: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _analyze_consultations_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Analyze consultation history"""
+        try:
+            consultation_stats = await self._analyze_consultation_history()
+            state["consultation_stats"] = consultation_stats
+            state["step"] = "consultations_analyzed"
+        except Exception as e:
+            logger.error(f"Error analyzing consultations: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _forecast_demand_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Forecast product demand"""
+        try:
+            demand_forecast = await self._forecast_demand(state["patterns"])
+            state["demand_forecast"] = demand_forecast
+            state["step"] = "demand_forecasted"
+        except Exception as e:
+            logger.error(f"Error forecasting demand: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _identify_segments_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Identify customer segments"""
+        try:
+            segments = await self._identify_segments(state["customer_preferences"])
+            state["customer_segments"] = segments
+            state["step"] = "segments_identified"
+        except Exception as e:
+            logger.error(f"Error identifying segments: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _generate_report_node(self, state: AnalysisState) -> AnalysisState:
+        """Node: Generate comprehensive analysis report"""
+        try:
+            report = await self._generate_analysis_report(
+                patterns=state["patterns"],
+                consultation_stats=state["consultation_stats"],
+                demand_forecast=state["demand_forecast"],
+                segments=state["customer_segments"]
+            )
+            state["report"] = report
+            state["step"] = "report_generated"
+        except Exception as e:
+            logger.error(f"Error generating report: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
     
     async def _get_all_customer_preferences(self) -> List[Dict[str, Any]]:
         """Fetch all customer preferences from database"""

@@ -1,13 +1,21 @@
-"""Consultation agent for personalized jewelry recommendations"""
+"""Consultation agent for personalized jewelry recommendations using LangGraph"""
 
 import re
+import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+from langgraph.graph import StateGraph, END
+from langchain_core.runnables import RunnableConfig
+
 from agents.base_agent import BaseAgent
+from agents.graph_states import ConsultantState
 from database.session import async_session_factory
 from database.repositories import CustomerPreferenceRepository
 from rag.retrieval import RAGRetriever
+
+
+logger = logging.getLogger(__name__)
 
 
 def _clean_thinking_blocks(text: str) -> str:
@@ -18,7 +26,7 @@ def _clean_thinking_blocks(text: str) -> str:
 
 
 class ConsultantAgent(BaseAgent):
-    """Agent for interactive jewelry consultation and recommendations"""
+    """Agent for interactive jewelry consultation and recommendations using LangGraph"""
     
     DEFAULT_SYSTEM_PROMPT = """You are an expert jewelry consultant with deep knowledge of precious metals, gemstones, and fashion trends.
 Your role is to help customers find the perfect jewelry by understanding their preferences, style, budget, and occasion.
@@ -46,6 +54,30 @@ If the customer hasn't shared their preferences yet, gently ask about:
     def __init__(self, llm_provider, rag_service, language: str = "auto", custom_system_prompt: str = None):
         super().__init__(llm_provider, rag_service, language, custom_system_prompt)
         self.rag_retriever = RAGRetriever(rag_service) if rag_service else None
+        self.graph = self._build_graph()
+    
+    def _build_graph(self) -> StateGraph:
+        """Build LangGraph workflow for consultation process"""
+        workflow = StateGraph(ConsultantState)
+        
+        # Add nodes
+        workflow.add_node("load_profile", self._load_profile_node)
+        workflow.add_node("extract_preferences", self._extract_preferences_node)
+        workflow.add_node("search_products", self._search_products_node)
+        workflow.add_node("generate_response", self._generate_response_node)
+        workflow.add_node("update_profile", self._update_profile_node)
+        workflow.add_node("log_interaction", self._log_interaction_node)
+        
+        # Define edges
+        workflow.set_entry_point("load_profile")
+        workflow.add_edge("load_profile", "extract_preferences")
+        workflow.add_edge("extract_preferences", "search_products")
+        workflow.add_edge("search_products", "generate_response")
+        workflow.add_edge("generate_response", "update_profile")
+        workflow.add_edge("update_profile", "log_interaction")
+        workflow.add_edge("log_interaction", END)
+        
+        return workflow.compile()
     
     async def process(
         self,
@@ -54,7 +86,7 @@ If the customer hasn't shared their preferences yet, gently ask about:
         conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
-        Process consultation request
+        Process consultation request using LangGraph workflow
         
         Args:
             user_id: User identifier
@@ -67,57 +99,37 @@ If the customer hasn't shared their preferences yet, gently ask about:
         try:
             self.logger.info(f"Processing consultation for user {user_id}: {message[:50]}...")
             
-            # 1. Get customer profile
-            profile = await self._get_customer_profile(user_id)
+            # Initialize state
+            initial_state: ConsultantState = {
+                "user_id": user_id,
+                "message": message,
+                "conversation_history": conversation_history,
+                "user_profile": None,
+                "extracted_preferences": {},
+                "products": [],
+                "response": "",
+                "recommendations": [],
+                "error": None,
+                "step": "start"
+            }
             
-            # 2. Extract preferences from message
-            extracted_prefs = await self._extract_preferences_from_message(message)
+            # Run graph
+            final_state = await self.graph.ainvoke(initial_state)
             
-            # 3. Merge with existing profile
-            if profile:
-                merged_prefs = self._merge_preferences(profile, extracted_prefs)
-            else:
-                merged_prefs = extracted_prefs
-            
-            # 4. Search products via RAG
-            products = []
-            if self.rag_retriever and merged_prefs:
-                rag_result = await self.rag_retriever.retrieve_relevant_products(
-                    query=message,
-                    user_preferences=merged_prefs,
-                    limit=8,
-                    include_context=False
-                )
-                products = rag_result.get("products", [])
-            
-            # 5. Generate recommendations via LLM
-            response = await self._generate_consultation_response(
-                message=message,
-                user_profile=merged_prefs,
-                products=products,
-                conversation_history=conversation_history
-            )
-            
-            # 6. Update customer preferences if changed
-            if extracted_prefs and any(extracted_prefs.values()):
-                await self._update_customer_preferences(user_id, extracted_prefs, profile is None)
-            
-            # 7. Log interaction
-            product_ids = self._extract_product_ids(products[:5])
-            await self.log_interaction(
-                user_id=user_id,
-                agent_type="consultant",
-                input_msg=message,
-                output_msg=response,
-                recommendations=product_ids,
-                preference_updates=extracted_prefs
-            )
+            # Return result
+            if final_state.get("error"):
+                return {
+                    "response": "Извините, произошла ошибка. Пожалуйста, попробуйте еще раз.",
+                    "recommendations": [],
+                    "extracted_preferences": {},
+                    "error": final_state["error"]
+                }
             
             return {
-                "response": response,
-                "recommendations": products[:5],
-                "extracted_preferences": extracted_prefs,
-                "has_profile": profile is not None,
+                "response": final_state["response"],
+                "recommendations": final_state["products"][:5],
+                "extracted_preferences": final_state["extracted_preferences"],
+                "has_profile": final_state["user_profile"] is not None,
                 "user_id": user_id
             }
         
@@ -129,6 +141,105 @@ If the customer hasn't shared their preferences yet, gently ask about:
                 "extracted_preferences": {},
                 "error": str(e)
             }
+    
+    async def _load_profile_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Load customer profile from database"""
+        try:
+            profile = await self._get_customer_profile(state["user_id"])
+            state["user_profile"] = profile
+            state["step"] = "profile_loaded"
+        except Exception as e:
+            logger.error(f"Error loading profile: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _extract_preferences_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Extract preferences from user message"""
+        try:
+            extracted_prefs = await self._extract_preferences_from_message(state["message"])
+            state["extracted_preferences"] = extracted_prefs
+            
+            # Merge with existing profile
+            if state["user_profile"]:
+                merged_prefs = self._merge_preferences(state["user_profile"], extracted_prefs)
+                state["user_profile"] = merged_prefs
+            else:
+                state["user_profile"] = extracted_prefs
+            
+            state["step"] = "preferences_extracted"
+        except Exception as e:
+            logger.error(f"Error extracting preferences: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _search_products_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Search products via RAG"""
+        try:
+            products = []
+            if self.rag_retriever and state["user_profile"]:
+                rag_result = await self.rag_retriever.retrieve_relevant_products(
+                    query=state["message"],
+                    user_preferences=state["user_profile"],
+                    limit=8,
+                    include_context=False
+                )
+                products = rag_result.get("products", [])
+            state["products"] = products
+            state["step"] = "products_searched"
+        except Exception as e:
+            logger.error(f"Error searching products: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _generate_response_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Generate consultation response via LLM"""
+        try:
+            response = await self._generate_consultation_response(
+                message=state["message"],
+                user_profile=state["user_profile"],
+                products=state["products"],
+                conversation_history=state["conversation_history"]
+            )
+            state["response"] = response
+            state["recommendations"] = self._extract_product_ids(state["products"][:5])
+            state["step"] = "response_generated"
+        except Exception as e:
+            logger.error(f"Error generating response: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _update_profile_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Update customer preferences in database"""
+        try:
+            if state["extracted_preferences"] and any(state["extracted_preferences"].values()):
+                is_new = state["user_profile"] is None or not state["user_profile"]
+                await self._update_customer_preferences(
+                    state["user_id"],
+                    state["extracted_preferences"],
+                    is_new
+                )
+            state["step"] = "profile_updated"
+        except Exception as e:
+            logger.error(f"Error updating profile: {e}", exc_info=True)
+            # Don't fail the whole process if profile update fails
+        return state
+    
+    async def _log_interaction_node(self, state: ConsultantState) -> ConsultantState:
+        """Node: Log interaction to database"""
+        try:
+            await self.log_interaction(
+                user_id=state["user_id"],
+                agent_type="consultant",
+                input_msg=state["message"],
+                output_msg=state["response"],
+                recommendations=state["recommendations"],
+                preference_updates=state["extracted_preferences"]
+            )
+            state["step"] = "interaction_logged"
+        except Exception as e:
+            logger.error(f"Error logging interaction: {e}", exc_info=True)
+            # Don't fail the whole process if logging fails
+        return state
     
     async def _get_customer_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get customer profile from database"""

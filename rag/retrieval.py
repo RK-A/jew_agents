@@ -1,19 +1,27 @@
-"""RAG retrieval pipeline for jewelry product recommendations"""
+"""Simplified RAG retrieval pipeline using LangChain"""
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from rag.qdrant_service import QdrantService
+from rag.langchain_rag import LangChainRAG
 
 
 logger = logging.getLogger(__name__)
 
 
 class RAGRetriever:
-    """RAG retrieval pipeline combining semantic search with user preferences"""
+    """Simplified RAG retrieval pipeline using LangChain integration"""
     
-    def __init__(self, qdrant_service: QdrantService):
-        self.qdrant = qdrant_service
-        logger.info("Initialized RAG retriever")
+    def __init__(self, rag_service: Union[QdrantService, LangChainRAG]):
+        """
+        Initialize RAG retriever
+        
+        Args:
+            rag_service: Either QdrantService (legacy) or LangChainRAG (recommended)
+        """
+        self.rag_service = rag_service
+        self.use_langchain = isinstance(rag_service, LangChainRAG)
+        logger.info(f"Initialized RAG retriever (LangChain: {self.use_langchain})")
     
     async def retrieve_relevant_products(
         self,
@@ -35,38 +43,45 @@ class RAGRetriever:
             Dict with products and optional LLM context
         """
         try:
-            category_filter = None
-            material_filter = None
-            price_min = None
-            price_max = None
-            
-            if user_preferences:
-                preferred_materials = user_preferences.get("preferred_materials", [])
-                if preferred_materials:
-                    material_filter = preferred_materials
+            if self.use_langchain:
+                products = await self.rag_service.search_with_preferences(
+                    query=query,
+                    user_preferences=user_preferences,
+                    limit=limit
+                )
+            else:
+                category_filter = None
+                material_filter = None
+                price_min = None
+                price_max = None
                 
-                budget_min = user_preferences.get("budget_min")
-                budget_max = user_preferences.get("budget_max")
-                if budget_min is not None:
-                    price_min = budget_min
-                if budget_max is not None:
-                    price_max = budget_max
+                if user_preferences:
+                    preferred_materials = user_preferences.get("preferred_materials", [])
+                    if preferred_materials:
+                        material_filter = preferred_materials
+                    
+                    budget_min = user_preferences.get("budget_min")
+                    budget_max = user_preferences.get("budget_max")
+                    if budget_min is not None:
+                        price_min = budget_min
+                    if budget_max is not None:
+                        price_max = budget_max
+                    
+                    if "category" in query.lower():
+                        for cat in ["rings", "necklaces", "bracelets", "earrings", "pendants"]:
+                            if cat in query.lower():
+                                category_filter = cat
+                                break
                 
-                if "category" in query.lower():
-                    for cat in ["rings", "necklaces", "bracelets", "earrings", "pendants"]:
-                        if cat in query.lower():
-                            category_filter = cat
-                            break
-            
-            products = await self.qdrant.search(
-                query=query,
-                limit=limit,
-                category_filter=category_filter,
-                material_filter=material_filter,
-                price_min=price_min,
-                price_max=price_max,
-                score_threshold=0.5
-            )
+                products = await self.rag_service.search(
+                    query=query,
+                    limit=limit,
+                    category_filter=category_filter,
+                    material_filter=material_filter,
+                    price_min=price_min,
+                    price_max=price_max,
+                    score_threshold=0.5
+                )
             
             result = {
                 "products": products,
@@ -187,14 +202,21 @@ class RAGRetriever:
         query = f"{category} jewelry"
         
         try:
-            products = await self.qdrant.search(
-                query=query,
-                limit=limit,
-                category_filter=category,
-                material_filter=user_preferences.get("preferred_materials") if user_preferences else None,
-                price_min=user_preferences.get("budget_min") if user_preferences else None,
-                price_max=user_preferences.get("budget_max") if user_preferences else None
-            )
+            if self.use_langchain:
+                products = await self.rag_service.search_with_preferences(
+                    query=query,
+                    user_preferences=user_preferences,
+                    limit=limit
+                )
+            else:
+                products = await self.rag_service.search(
+                    query=query,
+                    limit=limit,
+                    category_filter=category,
+                    material_filter=user_preferences.get("preferred_materials") if user_preferences else None,
+                    price_min=user_preferences.get("budget_min") if user_preferences else None,
+                    price_max=user_preferences.get("budget_max") if user_preferences else None
+                )
             
             logger.info(f"Found {len(products)} products in category: {category}")
             return products
@@ -212,10 +234,10 @@ class RAGRetriever:
         query = f"{style} style jewelry"
         
         try:
-            products = await self.qdrant.search(
-                query=query,
-                limit=limit
-            )
+            if self.use_langchain:
+                products = await self.rag_service.search(query=query, limit=limit)
+            else:
+                products = await self.rag_service.search(query=query, limit=limit)
             
             style_products = [
                 p for p in products
@@ -238,10 +260,10 @@ class RAGRetriever:
         query = "trending fashionable jewelry"
         
         try:
-            products = await self.qdrant.search(
-                query=query,
-                limit=limit * 2
-            )
+            if self.use_langchain:
+                products = await self.rag_service.search(query=query, limit=limit * 2)
+            else:
+                products = await self.rag_service.search(query=query, limit=limit * 2)
             
             trending = [
                 p for p in products
@@ -259,35 +281,5 @@ class RAGRetriever:
         
         except Exception as e:
             logger.error(f"Error searching trending products: {e}", exc_info=True)
-            return []
-    
-    async def search_similar_products(
-        self,
-        product_id: str,
-        limit: int = 5
-    ) -> List[Dict[str, Any]]:
-        """Find products similar to given product"""
-        try:
-            results = await self.qdrant.client.recommend(
-                collection_name=self.qdrant.collection_name,
-                positive=[product_id],
-                limit=limit + 1
-            )
-            
-            similar = [
-                {
-                    "product_id": result.id,
-                    "score": result.score,
-                    **result.payload
-                }
-                for result in results
-                if str(result.id) != str(product_id)
-            ][:limit]
-            
-            logger.info(f"Found {len(similar)} similar products for {product_id}")
-            return similar
-        
-        except Exception as e:
-            logger.error(f"Error finding similar products: {e}", exc_info=True)
             return []
 

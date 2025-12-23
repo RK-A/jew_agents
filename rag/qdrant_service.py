@@ -11,6 +11,7 @@ from qdrant_client.models import (
     FieldCondition,
     MatchValue,
     Range,
+    SearchRequest,
 )
 from langchain_core.embeddings import Embeddings
 
@@ -164,21 +165,23 @@ class QdrantService:
                 price_max=price_max
             )
             
-            results = await self.client.search(
+            results = await self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=query_embedding,
+                query=query_embedding,
                 limit=limit,
                 query_filter=query_filter,
-                score_threshold=score_threshold
+                score_threshold=score_threshold,
+                with_payload=True,
+                with_vectors=False
             )
             
             products = [
                 {
-                    "product_id": result.id,
-                    "score": result.score,
-                    **result.payload
+                    "product_id": point.id,
+                    "score": point.score,
+                    **point.payload
                 }
-                for result in results
+                for point in results.points
             ]
             
             logger.debug(f"Search query '{query}' returned {len(products)} results")

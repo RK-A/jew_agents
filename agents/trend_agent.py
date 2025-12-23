@@ -1,14 +1,21 @@
-"""Trend analysis agent for fashion journal parsing and trend identification"""
+"""Trend analysis agent for fashion journal parsing and trend identification using LangGraph"""
 
+import logging
 from typing import Dict, Any, List
 import re
 from collections import Counter
 
+from langgraph.graph import StateGraph, END
+
 from agents.base_agent import BaseAgent
+from agents.graph_states import TrendState
+
+
+logger = logging.getLogger(__name__)
 
 
 class TrendAgent(BaseAgent):
-    """Agent for analyzing fashion trends from journals and articles"""
+    """Agent for analyzing fashion trends from journals and articles using LangGraph"""
     
     DEFAULT_SYSTEM_PROMPT = """You are a fashion trend analyst specializing in jewelry and accessories.
 Your role is to analyze fashion journals, identify emerging trends, and provide insights for product development.
@@ -38,9 +45,36 @@ Provide actionable insights for:
         "descriptors": ["elegant", "bold", "delicate", "statement", "layered", "stackable", "chunky", "dainty"]
     }
     
+    def __init__(self, llm_provider, rag_service=None, language: str = "auto", custom_system_prompt: str = None):
+        super().__init__(llm_provider, rag_service, language, custom_system_prompt)
+        self.graph = self._build_graph()
+    
+    def _build_graph(self) -> StateGraph:
+        """Build LangGraph workflow for trend analysis process"""
+        workflow = StateGraph(TrendState)
+        
+        # Add nodes
+        workflow.add_node("extract_keywords", self._extract_keywords_node)
+        workflow.add_node("analyze_trends", self._analyze_trends_node)
+        workflow.add_node("calculate_scores", self._calculate_scores_node)
+        workflow.add_node("identify_emerging", self._identify_emerging_node)
+        workflow.add_node("generate_recommendations", self._generate_recommendations_node)
+        workflow.add_node("generate_report", self._generate_report_node)
+        
+        # Define edges
+        workflow.set_entry_point("extract_keywords")
+        workflow.add_edge("extract_keywords", "analyze_trends")
+        workflow.add_edge("analyze_trends", "calculate_scores")
+        workflow.add_edge("calculate_scores", "identify_emerging")
+        workflow.add_edge("identify_emerging", "generate_recommendations")
+        workflow.add_edge("generate_recommendations", "generate_report")
+        workflow.add_edge("generate_report", END)
+        
+        return workflow.compile()
+    
     async def process(self, content: str) -> Dict[str, Any]:
         """
-        Process trend analysis from fashion journal content
+        Process trend analysis from fashion journal content using LangGraph workflow
         
         Args:
             content: Fashion journal article or content text
@@ -51,41 +85,37 @@ Provide actionable insights for:
         try:
             self.logger.info(f"Starting trend analysis on {len(content)} characters of content...")
             
-            # 1. Parse content and extract keywords
-            extracted_keywords = await self._extract_keywords(content)
+            # Initialize state
+            initial_state: TrendState = {
+                "content": content,
+                "extracted_keywords": {},
+                "identified_trends": {},
+                "emerging_trends": [],
+                "trend_scores": {},
+                "recommendations": [],
+                "report": "",
+                "error": None,
+                "step": "start"
+            }
             
-            # 2. Analyze trends from content
-            trends = await self._analyze_trends(content, extracted_keywords)
+            # Run graph
+            final_state = await self.graph.ainvoke(initial_state)
             
-            # 3. Generate product trend scores
-            trend_scores = await self._calculate_trend_scores(trends)
-            
-            # 4. Identify emerging trends
-            emerging_trends = await self._identify_emerging_trends(trends)
-            
-            # 5. Generate recommendations
-            recommendations = await self._generate_recommendations(
-                trends=trends,
-                emerging=emerging_trends
-            )
-            
-            # 6. Generate comprehensive report
-            report = await self._generate_trend_report(
-                content=content,
-                extracted_keywords=extracted_keywords,
-                trends=trends,
-                emerging_trends=emerging_trends,
-                recommendations=recommendations
-            )
+            # Return result
+            if final_state.get("error"):
+                return {
+                    "status": "error",
+                    "message": final_state["error"]
+                }
             
             return {
                 "status": "success",
-                "report": report,
-                "extracted_keywords": extracted_keywords,
-                "identified_trends": trends,
-                "emerging_trends": emerging_trends,
-                "trend_scores": trend_scores,
-                "recommendations": recommendations,
+                "report": final_state["report"],
+                "extracted_keywords": final_state["extracted_keywords"],
+                "identified_trends": final_state["identified_trends"],
+                "emerging_trends": final_state["emerging_trends"],
+                "trend_scores": final_state["trend_scores"],
+                "recommendations": final_state["recommendations"],
                 "content_length": len(content)
             }
         
@@ -95,6 +125,81 @@ Provide actionable insights for:
                 "status": "error",
                 "message": str(e)
             }
+    
+    async def _extract_keywords_node(self, state: TrendState) -> TrendState:
+        """Node: Extract jewelry-related keywords from content"""
+        try:
+            extracted_keywords = await self._extract_keywords(state["content"])
+            state["extracted_keywords"] = extracted_keywords
+            state["step"] = "keywords_extracted"
+        except Exception as e:
+            logger.error(f"Error extracting keywords: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _analyze_trends_node(self, state: TrendState) -> TrendState:
+        """Node: Analyze trends using LLM"""
+        try:
+            trends = await self._analyze_trends(state["content"], state["extracted_keywords"])
+            state["identified_trends"] = trends
+            state["step"] = "trends_analyzed"
+        except Exception as e:
+            logger.error(f"Error analyzing trends: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _calculate_scores_node(self, state: TrendState) -> TrendState:
+        """Node: Calculate trend scores for product categories"""
+        try:
+            trend_scores = await self._calculate_trend_scores(state["identified_trends"])
+            state["trend_scores"] = trend_scores
+            state["step"] = "scores_calculated"
+        except Exception as e:
+            logger.error(f"Error calculating scores: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _identify_emerging_node(self, state: TrendState) -> TrendState:
+        """Node: Identify emerging trends"""
+        try:
+            emerging_trends = await self._identify_emerging_trends(state["identified_trends"])
+            state["emerging_trends"] = emerging_trends
+            state["step"] = "emerging_identified"
+        except Exception as e:
+            logger.error(f"Error identifying emerging trends: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _generate_recommendations_node(self, state: TrendState) -> TrendState:
+        """Node: Generate product and marketing recommendations"""
+        try:
+            recommendations = await self._generate_recommendations(
+                trends=state["identified_trends"],
+                emerging=state["emerging_trends"]
+            )
+            state["recommendations"] = recommendations
+            state["step"] = "recommendations_generated"
+        except Exception as e:
+            logger.error(f"Error generating recommendations: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
+    async def _generate_report_node(self, state: TrendState) -> TrendState:
+        """Node: Generate comprehensive trend analysis report"""
+        try:
+            report = await self._generate_trend_report(
+                content=state["content"],
+                extracted_keywords=state["extracted_keywords"],
+                trends=state["identified_trends"],
+                emerging_trends=state["emerging_trends"],
+                recommendations=state["recommendations"]
+            )
+            state["report"] = report
+            state["step"] = "report_generated"
+        except Exception as e:
+            logger.error(f"Error generating report: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
     
     async def _extract_keywords(self, content: str) -> Dict[str, List[str]]:
         """Extract jewelry-related keywords from content"""

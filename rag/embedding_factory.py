@@ -1,4 +1,4 @@
-"""Factory for creating LangChain embedding instances"""
+"""Simplified factory for creating LangChain embedding instances"""
 
 import logging
 from typing import Optional
@@ -6,42 +6,6 @@ from langchain_core.embeddings import Embeddings
 
 
 logger = logging.getLogger(__name__)
-
-
-def _import_openai_embeddings():
-    """Lazy import OpenAI embeddings"""
-    try:
-        from langchain_openai import OpenAIEmbeddings
-        return OpenAIEmbeddings
-    except ImportError:
-        try:
-            from langchain.embeddings import OpenAIEmbeddings
-            return OpenAIEmbeddings
-        except ImportError:
-            raise ImportError(
-                "OpenAI embeddings not available. Install with: pip install langchain-openai"
-            )
-
-
-def _import_huggingface_embeddings():
-    """Lazy import HuggingFace embeddings"""
-    try:
-        from langchain_huggingface import HuggingFaceEmbeddings
-        return HuggingFaceEmbeddings
-    except ImportError:
-        try:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings
-        except ImportError:
-            raise ImportError(
-                "HuggingFace embeddings not available. Install with: pip install langchain-huggingface sentence-transformers"
-            )
-
-
-def _import_local_api_embeddings():
-    """Import local API embeddings (always available)"""
-    from rag.local_api_embeddings import LocalAPIEmbeddings
-    return LocalAPIEmbeddings
 
 
 def create_langchain_embeddings(
@@ -53,8 +17,13 @@ def create_langchain_embeddings(
 ) -> Embeddings:
     """Factory function to create LangChain embedding instances
     
+    Supported providers:
+    - openai: OpenAI embeddings (requires api_key)
+    - gigachat: GigaChat embeddings (requires api_key)
+    - local: Local API embeddings compatible with OpenAI API (requires base_url)
+    
     Args:
-        provider: Embedding provider ("openai", "huggingface", "gigachat", "local")
+        provider: Embedding provider ("openai", "gigachat", "local")
         model: Model name/identifier
         api_key: API key for provider (required for OpenAI, GigaChat)
         base_url: Base URL for local API or custom OpenAI endpoint
@@ -72,18 +41,16 @@ def create_langchain_embeddings(
             raise ValueError("OpenAI embeddings require api_key")
         
         logger.info(f"Creating OpenAI embeddings with model: {model}")
-        OpenAIEmbeddings = _import_openai_embeddings()
+        try:
+            from langchain_openai import OpenAIEmbeddings
+        except ImportError:
+            raise ImportError(
+                "OpenAI embeddings not available. Install: pip install langchain-openai"
+            )
+        
         return OpenAIEmbeddings(
             model=model,
             openai_api_key=api_key,
-            **kwargs
-        )
-    
-    elif provider == "huggingface":
-        logger.info(f"Creating HuggingFace embeddings with model: {model}")
-        HuggingFaceEmbeddings = _import_huggingface_embeddings()
-        return HuggingFaceEmbeddings(
-            model_name=model,
             **kwargs
         )
     
@@ -92,8 +59,6 @@ def create_langchain_embeddings(
             raise ValueError("GigaChat embeddings require api_key")
         
         logger.info(f"Creating GigaChat embeddings with model: {model}")
-        # GigaChat doesn't have official LangChain integration yet
-        # Using custom wrapper
         from rag.gigachat_embeddings import GigaChatLangChainEmbeddings
         return GigaChatLangChainEmbeddings(
             api_key=api_key,
@@ -106,7 +71,7 @@ def create_langchain_embeddings(
             raise ValueError("Local API embeddings require base_url (e.g., http://127.0.0.1:1234/v1)")
         
         logger.info(f"Creating Local API embeddings: {base_url}, model: {model}")
-        LocalAPIEmbeddings = _import_local_api_embeddings()
+        from rag.local_api_embeddings import LocalAPIEmbeddings
         return LocalAPIEmbeddings(
             base_url=base_url,
             model=model,
@@ -114,7 +79,10 @@ def create_langchain_embeddings(
         )
     
     else:
-        raise ValueError(f"Unknown embedding provider: {provider}")
+        raise ValueError(
+            f"Unknown embedding provider: {provider}. "
+            f"Supported: openai, gigachat, local"
+        )
 
 
 def create_embeddings_from_config(config) -> Embeddings:
