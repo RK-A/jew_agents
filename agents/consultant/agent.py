@@ -9,7 +9,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 
 from agents.base_agent import BaseAgent
-from agents.graph_states import ConsultantState
+from agents.consultant.state import ConsultantState
 from database.session import async_session_factory
 from database.repositories import CustomerPreferenceRepository
 from rag.retrieval import RAGRetriever

@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Literal, ClassVar
+from typing import Literal, ClassVar, Optional
 
 
 class Settings(BaseSettings):
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4"
     llm_api_key: str
     llm_temperature: float = 0.7
-    llm_base_url: str
+    llm_base_url: Optional[str] = None
     
     # Database configuration
     postgres_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/jewelry"
