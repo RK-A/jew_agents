@@ -31,6 +31,7 @@ class OrchestratorState(TypedDict):
     consultant_result: Optional[Dict[str, Any]]
     analysis_result: Optional[Dict[str, Any]]
     trend_result: Optional[Dict[str, Any]]
+    girlfriend_result: Optional[Dict[str, Any]]
     
     # Final output
     status: str

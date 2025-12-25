@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, END
 from agents.consultant_agent import ConsultantAgent
 from agents.analysis_agent import AnalysisAgent
 from agents.trend_agent import TrendAgent
+from agents.girlfriend.agent import GirlfriendAgent
 from agents.graph_states import OrchestratorState
 from llm.base import LLMProvider
 from rag.qdrant_service import QdrantService
@@ -59,6 +60,12 @@ class AgentOrchestrator:
             language=language,
             custom_system_prompt=self.custom_prompts.get("trend")
         )
+
+        self.girlfriend_agent = GirlfriendAgent(
+            llm_provider=llm_provider,
+            language=language,
+            custom_system_prompt=self.custom_prompts.get("girlfriend")
+        )
         
         # Build orchestrator graph
         self.graph = self._build_graph()
@@ -74,12 +81,15 @@ class AgentOrchestrator:
         workflow.add_node("run_consultant", self._run_consultant_node)
         workflow.add_node("run_analysis", self._run_analysis_node)
         workflow.add_node("run_trend", self._run_trend_node)
+        workflow.add_node("run_girlfriend", self._run_girlfriend_node)
         workflow.add_node("finalize_result", self._finalize_result_node)
         
         # Define conditional routing
         workflow.set_entry_point("route_task")
         
         def should_run_consultant(state: OrchestratorState) -> str:
+            if "girlfriend" in state.get("agents_to_run", []):
+                return "run_girlfriend"
             if "consultant" in state.get("agents_to_run", []):
                 return "run_consultant"
             return "check_analysis"
@@ -98,10 +108,14 @@ class AgentOrchestrator:
             "route_task",
             should_run_consultant,
             {
+                "run_girlfriend": "run_girlfriend",
                 "run_consultant": "run_consultant",
                 "check_analysis": "run_analysis"
             }
         )
+
+        # girlfriend is a terminal single-agent flow
+        workflow.add_edge("run_girlfriend", "finalize_result")
         
         workflow.add_conditional_edges(
             "run_consultant",
@@ -235,6 +249,8 @@ class AgentOrchestrator:
             
             if task_type == "consultation":
                 agents_to_run = ["consultant"]
+            elif task_type == "girlfriend":
+                agents_to_run = ["girlfriend"]
             elif task_type == "analysis":
                 agents_to_run = ["analysis"]
             elif task_type == "trend":
@@ -250,6 +266,22 @@ class AgentOrchestrator:
             logger.error(f"Error routing task: {e}", exc_info=True)
             state["error"] = str(e)
             state["status"] = "error"
+        return state
+
+    async def _run_girlfriend_node(self, state: OrchestratorState) -> OrchestratorState:
+        """Node: Run GirlfriendAgent"""
+        try:
+            result = await self.girlfriend_agent.process(
+                user_id=state["user_id"] or "anonymous",
+                message=state.get("message") or "",
+                conversation_history=state.get("conversation_history"),
+            )
+            state["girlfriend_result"] = result
+            state["completed_agents"] = state.get("completed_agents", []) + ["girlfriend"]
+            state["step"] = "girlfriend_completed"
+        except Exception as e:
+            logger.error(f"Error running girlfriend: {e}", exc_info=True)
+            state["error"] = str(e)
         return state
     
     async def _run_consultant_node(self, state: OrchestratorState) -> OrchestratorState:
@@ -303,6 +335,9 @@ class AgentOrchestrator:
         """Node: Finalize and format results"""
         try:
             final_result = {}
+
+            if state.get("girlfriend_result"):
+                final_result["girlfriend"] = state["girlfriend_result"]
             
             if state.get("consultant_result"):
                 final_result["consultant"] = state["consultant_result"]
@@ -375,6 +410,11 @@ class AgentOrchestrator:
                 "status": "active",
                 "has_rag": self.trend_agent.rag is not None
             },
+            "girlfriend_agent": {
+                "name": "GirlfriendAgent",
+                "status": "active",
+                "has_rag": False
+            },
             "llm_provider": type(self.llm_provider).__name__,
             "rag_service_available": self.rag_service is not None
         }
@@ -405,6 +445,7 @@ class AgentOrchestrator:
                 "consultant_result": None,
                 "analysis_result": None,
                 "trend_result": None,
+                "girlfriend_result": None,
                 "status": "pending",
                 "final_result": {},
                 "error": None,

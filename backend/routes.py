@@ -6,6 +6,8 @@ from typing import List, Dict, Any
 from backend.schemas import (
     ConsultationRequest,
     ConsultationResponse,
+    GirlfriendChatRequest,
+    GirlfriendChatResponse,
     CustomerProfileResponse,
     CustomerPreferenceUpdate,
     CustomerPreferenceUpdateResponse,
@@ -97,6 +99,52 @@ async def consultation(
         return ConsultationResponse(
             status="error",
             agent="consultant",
+            error=str(e)
+        )
+
+
+@router.post(
+    "/girlfriend/{user_id}",
+    response_model=GirlfriendChatResponse,
+    summary="Чат с girlfriend-агентом",
+    description="Тёплый дружеский чат + гороскопы (через публичное API)"
+)
+async def girlfriend_chat(
+    user_id: str,
+    request: GirlfriendChatRequest,
+    orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """Chat endpoint for the girlfriend agent."""
+    try:
+        logger.info(f"Girlfriend chat request from user {user_id}")
+
+        result = await orchestrator.handle_multi_agent_task(
+            task_type="girlfriend",
+            user_id=user_id,
+            message=request.message,
+            conversation_history=request.conversation_history,
+        )
+
+        if result.get("status") == "success":
+            agent_block = (result.get("result") or {}).get("girlfriend") or {}
+            return GirlfriendChatResponse(
+                status="success",
+                agent="girlfriend",
+                response=agent_block.get("response"),
+                zodiac_sign=agent_block.get("zodiac_sign"),
+            )
+
+        return GirlfriendChatResponse(
+            status="error",
+            agent="girlfriend",
+            error=result.get("error", "Unknown error occurred")
+        )
+
+    except Exception as e:
+        logger.error(f"Girlfriend chat error for user {user_id}: {e}", exc_info=True)
+        return GirlfriendChatResponse(
+            status="error",
+            agent="girlfriend",
             error=str(e)
         )
 
