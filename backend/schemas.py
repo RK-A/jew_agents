@@ -101,11 +101,13 @@ class AnalysisReportResponse(BaseModel):
     """Response schema for customer analysis"""
     status: str = Field(..., description="Status: success or error")
     agent: str = Field(..., description="Agent type used")
-    report: Optional[Dict[str, Any]] = Field(None, description="Analysis report")
-    popular_styles: Optional[List[str]] = Field(None, description="Popular jewelry styles")
-    budget_distribution: Optional[Dict[str, int]] = Field(None, description="Budget distribution")
+    report: Optional[str] = Field(None, description="Analysis report")
+    customer_segments: Optional[List[Dict[str, Any]]] = Field(None, description="Customer segments identified")
+    consultation_records: Optional[List[Dict[str, Any]]] = Field(None, description="Consultation records")
     demand_forecast: Optional[Dict[str, Any]] = Field(None, description="Product demand forecast")
-    insights: Optional[List[str]] = Field(None, description="Key insights")
+    consultation_stats: Optional[Dict[str, Any]] = Field(None, description="Consultation statistics")
+    patterns: Optional[Dict[str, Any]] = Field(None, description="Patterns identified in customer data")
+    # insights: Optional[List[str]] = Field(None, description="Key insights")
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 

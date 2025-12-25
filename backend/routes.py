@@ -289,10 +289,12 @@ async def customer_analysis(
                 status="success",
                 agent="analysis",
                 report=agent_result.get("report"),
-                popular_styles=agent_result.get("popular_styles"),
-                budget_distribution=agent_result.get("budget_distribution"),
+                # consultation_records=agent_result.get("consultation_records"),
+                # consultation_stats=agent_result.get("consultation_stats"),
+                customer_segments=agent_result.get("customer_segments"),
+                patterns=agent_result.get("patterns"),
                 demand_forecast=agent_result.get("demand_forecast"),
-                insights=agent_result.get("insights")
+                # insights=agent_result.get("insights")
             )
         else:
             return AnalysisReportResponse(
