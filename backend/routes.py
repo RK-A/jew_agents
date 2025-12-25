@@ -82,6 +82,7 @@ async def consultation(
             return ConsultationResponse(
                 status="success",
                 agent="consultant",
+                products=agent_result.get("products"),
                 response=agent_result.get("response"),
                 recommendations=agent_result.get("recommendations"),
                 extracted_preferences=agent_result.get("extracted_preferences"),

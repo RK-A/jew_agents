@@ -1,10 +1,10 @@
 """Example usage of RAG system for jewelry products"""
 
 import asyncio
-from config import settings
 from rag.embedding_factory import create_embeddings_from_config
 from rag.qdrant_service import QdrantService
 from rag.retrieval import RAGRetriever
+from config import settings
 
 
 async def example_rag_usage():

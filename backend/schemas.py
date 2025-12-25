@@ -32,6 +32,10 @@ class ConsultationResponse(BaseModel):
         None,
         description="Follow-up questions for user"
     )
+    products: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=None,
+        description="List of product details"
+    )
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 

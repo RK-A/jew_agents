@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     
     # LLM Provider configuration
     llm_provider: Literal["openai", "gigachat"] = "openai"
-    llm_model: str = "gpt-4"
+    llm_model: str = "gpt-5-nano"
     llm_api_key: str
     llm_temperature: float = 0.7
     llm_base_url: Optional[str] = None
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     
     # Agent configuration
-    agent_language: Literal["en", "ru", "auto"] = "auto"
+    agent_language: Literal["en", "ru", "auto"] = "ru"
     agent_custom_prompt_consultant: str = ""
     agent_custom_prompt_analysis: str = ""
     agent_custom_prompt_trend: str = ""
