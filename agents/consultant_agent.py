@@ -397,11 +397,11 @@ Consultant:"""
                     "preferred_materials": preferences.get("preferred_materials", []),
                     "skin_tone": preferences.get("skin_tone"),
                     "occasion_types": preferences.get("occasion_types", []),
-                    "last_updated": datetime.utcnow()
+                    "last_updated": datetime.now()
                 }
                 
                 if is_new:
-                    pref_data["created_at"] = datetime.utcnow()
+                    pref_data["created_at"] = datetime.now()
                     pref_data["consultation_history"] = []
                     await repo.create(pref_data)
                 else:

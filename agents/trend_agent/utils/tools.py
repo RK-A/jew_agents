@@ -95,22 +95,6 @@ KEYWORD_MAPPING = {
     "лаконичн": "Лаконичный"
 }
 
-
-# def extract_keywords_tool(content: str) -> Dict[str, List[Dict[str, Any]]]:
-#     content_lower = content.lower()
-#     extracted = {}
-#     for category, keywords in JEWELRY_KEYWORDS.items():
-#         found = []
-#         for keyword in keywords:
-#             # Ищем как подстроку, без \b
-#             pattern = re.escape(keyword)
-#             matches = re.findall(pattern, content_lower)
-#             if matches:
-#                 found.append({"keyword": keyword, "count": len(matches)})
-#         if found:
-#             found.sort(key=lambda x: x["count"], reverse=True)
-#             extracted[category] = found
-#     return extracted
 def extract_keywords_tool(content: str) -> Dict[str, List[Dict[str, Any]]]:
     content_lower = content.lower()
     extracted = {}

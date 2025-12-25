@@ -122,3 +122,4 @@ async def test_update_preferences_endpoint():
         )
         assert response.status_code in [200, 500]  # May fail if DB not initialized
 
+

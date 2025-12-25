@@ -96,12 +96,12 @@ class TrendReportResponse(BaseModel):
     """Response schema for trend analysis"""
     status: str = Field(..., description="Status: success or error")
     agent: str = Field(..., description="Agent type used")
-    trends: Optional[List[str]] = Field(None, description="Identified trends")
-    keywords: Optional[List[str]] = Field(None, description="Trend keywords")
+    trends: Optional[Dict[str, Any]] = Field(None, description="Identified trends")
+    keywords: Optional[Dict[str, Any]] = Field(None, description="Trend keywords")
     mentioned_products: Optional[List[str]] = Field(None, description="Mentioned product types")
     trend_scores: Optional[Dict[str, float]] = Field(None, description="Category trend scores")
-    recommendations: Optional[List[str]] = Field(None, description="Product recommendations")
-    insights: Optional[str] = Field(None, description="Trend insights")
+    recommendations: Optional[List[Dict[str, str]]] = Field(None, description="Product recommendations")
+    report: Optional[str] = Field(None, description="Trend insights")
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 

@@ -74,12 +74,25 @@ def create_llm_provider_from_config(config) -> LLMProvider:
         LLMProvider instance
     """
     
-    return create_llm_provider(
-        provider=config.llm_provider,
-        api_key=config.llm_api_key,
-        model=config.llm_model,
-        temperature=config.llm_temperature,
-        embedding_model=config.embedding_model,
-        base_url=config.llm_base_url
-    )
+
+    if config.llm_base_url:
+        logger.info(f"Using custom LLM base URL: {config.llm_base_url}")
+
+
+        return create_llm_provider(
+            provider=config.llm_provider,
+            api_key=config.llm_api_key,
+            model=config.llm_model,
+            temperature=config.llm_temperature,
+            embedding_model=config.embedding_model,
+            base_url=config.llm_base_url
+        )
+    else:
+        return create_llm_provider(
+            provider=config.llm_provider,
+            api_key=config.llm_api_key,
+            model=config.llm_model,
+            temperature=config.llm_temperature,
+            embedding_model=config.embedding_model
+        )
 

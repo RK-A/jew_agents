@@ -85,7 +85,7 @@ class OpenAIProvider(LLMProvider):
         payload = {
             "model": self.model,
             "messages": messages,
-            "temperature": temperature if temperature is not None else self.temperature
+            # "temperature": temperature if temperature is not None else self.temperature
         }
         
         for attempt in range(self.max_retries):
@@ -163,7 +163,7 @@ class OpenAIProvider(LLMProvider):
             "model": self.model,
             "messages": messages,
             "tools": tools,
-            "temperature": self.temperature
+            # "temperature": self.temperature
         }
         
         for attempt in range(self.max_retries):

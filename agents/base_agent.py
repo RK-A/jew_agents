@@ -76,6 +76,8 @@ class BaseAgent(ABC):
         """
         pass
     
+
+    # Не абстрактная часть
     async def log_interaction(
         self,
         user_id: str,
@@ -104,7 +106,6 @@ class BaseAgent(ABC):
                 repo = ConsultationRecordRepository(session)
                 
                 record_data = {
-                    "id": str(uuid.uuid4()),  # Generate unique ID
                     "user_id": user_id,
                     "agent_type": agent_type,
                     "message": input_msg,

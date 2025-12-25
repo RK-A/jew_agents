@@ -293,12 +293,12 @@ async def trend_analysis(
             return TrendReportResponse(
                 status="success",
                 agent="trend",
+                keywords=agent_result.get("extracted_keywords"),
                 trends=agent_result.get("trends"),
-                keywords=agent_result.get("keywords"),
-                mentioned_products=agent_result.get("mentioned_products"),
+                mentioned_products=agent_result.get("emerging_trends"),
                 trend_scores=agent_result.get("trend_scores"),
                 recommendations=agent_result.get("recommendations"),
-                insights=agent_result.get("insights")
+                report=agent_result.get("report")
             )
         else:
             return TrendReportResponse(
@@ -308,7 +308,7 @@ async def trend_analysis(
             )
     
     except Exception as e:
-        logger.error(f"Trend analysis error: {e}", exc_info=True)
+        logger.error(f" r: {e}", exc_info=True)
         return TrendReportResponse(
             status="error",
             agent="trend",
@@ -465,4 +465,5 @@ async def health_check(
             qdrant_connected=False,
             agents_status=None
         )
+
 
