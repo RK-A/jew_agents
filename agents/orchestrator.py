@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 
 from langgraph.graph import StateGraph, END
 
-from agents.consultant_agent import ConsultantAgent
+from agents.consultant import ConsultantAgent
 from agents.analysis_agent import AnalysisAgent
 from agents.trend_agent import TrendAgent
 from agents.girlfriend.agent import GirlfriendAgent

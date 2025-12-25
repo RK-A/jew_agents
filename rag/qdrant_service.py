@@ -109,12 +109,12 @@ class QdrantService:
             descriptions = [
                 self._build_product_description(p) for p in products
             ]
-            
+            # print(products)
             embeddings_list = await self.embeddings.aembed_documents(descriptions)
             
             points = [
                 PointStruct(
-                    id=str(product["product_id"]),
+                    id=int(product["product_id"]),
                     vector=embedding,
                     payload=product
                 )
