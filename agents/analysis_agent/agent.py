@@ -91,6 +91,54 @@ class AnalysisAgent(BaseAgent):
 
         return workflow.compile()
 
+    async def run(self, query) -> Dict[str, Any]:
+        """
+        Выполняет анализ и возвращает структурированный результат.
+
+        Args:
+            query: Пользовательский запрос
+
+        Returns:
+            Dict с результатами анализа
+        """
+        try:
+            graph = self._build_graph()
+
+            # Создаём начальное состояние
+            initial_state: AnalysisState = {
+                "language": self.language,
+                "status": "started",
+                "error_message": None,
+                "data": query,
+                "modules": [],
+                "raw_data": [],
+                "consultation_records": [],
+                "patterns": {},
+                "consultation_stats": {},
+                "demand_forecast": {},
+                "customer_segments": [],
+                "report": None,
+                "total_customers": 0,
+                "generated_at": datetime.utcnow().isoformat(),
+            }
+
+            # Запускаем граф
+            final_state = await asyncio.wait_for(
+                graph.ainvoke(initial_state),
+                timeout=600
+            )
+
+            # Форматируем результат
+            result = self._format_output(final_state)
+
+            return result
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "total_customers": 0,
+                "error": str(e),
+            }
 
     async def process(self) -> Dict[str, Any]:
         """

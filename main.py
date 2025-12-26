@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     
     try:
         # Initialize database
+        print(settings.postgres_url)
         await init_db()
         await create_tables()
         logger.info("Database initialized successfully")
