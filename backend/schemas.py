@@ -64,6 +64,35 @@ class GirlfriendChatResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 
+# Taste detection schemas
+class TasteDetectionRequest(BaseModel):
+    """Request schema for taste detection endpoint"""
+    message: str = Field(..., description="User message for taste detection")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Optional conversation history"
+    )
+    current_question_index: Optional[int] = Field(
+        0,
+        description="Current question index in the taste detection flow"
+    )
+    answers: Optional[Dict[str, str]] = Field(
+        None,
+        description="Dictionary of answers so far (question_id -> answer_text)"
+    )
+
+
+class TasteDetectionResponse(BaseModel):
+    """Response schema for taste detection endpoint"""
+    status: str = Field(..., description="Status: success or error")
+    agent: str = Field("taste", description="Agent type used")
+    response: Optional[str] = Field(None, description="Agent response text")
+    current_question_index: Optional[int] = Field(None, description="Next question index")
+    answers: Optional[Dict[str, str]] = Field(None, description="Updated answers dictionary")
+    jewelry_profile: Optional[Dict[str, Any]] = Field(None, description="Detected jewelry preferences")
+    error: Optional[str] = Field(None, description="Error message if status is error")
+
+
 # Customer profile schemas
 class CustomerProfileResponse(BaseModel):
     """Response schema for customer profile"""

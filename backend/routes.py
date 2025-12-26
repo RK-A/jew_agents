@@ -8,6 +8,8 @@ from backend.schemas import (
     ConsultationResponse,
     GirlfriendChatRequest,
     GirlfriendChatResponse,
+    TasteDetectionRequest,
+    TasteDetectionResponse,
     CustomerProfileResponse,
     CustomerPreferenceUpdate,
     CustomerPreferenceUpdateResponse,
@@ -146,6 +148,68 @@ async def girlfriend_chat(
         return GirlfriendChatResponse(
             status="error",
             agent="girlfriend",
+            error=str(e)
+        )
+
+
+# Taste detection endpoints
+@router.post(
+    "/taste/{user_id}",
+    response_model=TasteDetectionResponse,
+    summary="Jewelry taste detection",
+    description="Detect user jewelry preferences through structured questions"
+)
+async def taste_detection(
+    user_id: str,
+    request: TasteDetectionRequest,
+    orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Handle taste detection request
+    
+    Args:
+        user_id: User identifier
+        request: Taste detection request with message and optional state
+        orchestrator: Agent orchestrator dependency
+    
+    Returns:
+        TasteDetectionResponse with taste analysis results
+    """
+    try:
+        logger.info(f"Taste detection request from user {user_id}")
+        
+        result = await orchestrator.run_taste_detection(
+            user_id=user_id,
+            message=request.message,
+            conversation_history=request.conversation_history,
+            current_question_index=request.current_question_index,
+            answers=request.answers
+        )
+        
+        # Extract data from result
+        if result.get("status") == "success":
+            agent_result = result.get("result", {})
+            
+            return TasteDetectionResponse(
+                status="success",
+                agent="taste",
+                response=agent_result.get("response"),
+                current_question_index=agent_result.get("current_question_index"),
+                answers=agent_result.get("answers"),
+                jewelry_profile=agent_result.get("jewelry_profile")
+            )
+        else:
+            return TasteDetectionResponse(
+                status="error",
+                agent="taste",
+                error=result.get("error", "Unknown error occurred")
+            )
+    
+    except Exception as e:
+        logger.error(f"Taste detection error for user {user_id}: {e}", exc_info=True)
+        return TasteDetectionResponse(
+            status="error",
+            agent="taste",
             error=str(e)
         )
 

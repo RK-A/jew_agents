@@ -17,6 +17,12 @@ class OrchestratorState(TypedDict):
     consultant_result: Optional[Dict[str, Any]]
     analysis_result: Optional[Dict[str, Any]]
     trend_result: Optional[Dict[str, Any]]
+    taste_result: Optional[Dict[str, Any]]
+    girlfriend_result: Optional[Dict[str, Any]]
+    
+    # Taste-specific state
+    current_question_index: Optional[int]
+    answers: Optional[Dict[str, str]]
     
     # Final output
     status: str

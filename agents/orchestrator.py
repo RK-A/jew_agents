@@ -9,6 +9,7 @@ from agents.consultant import ConsultantAgent
 from agents.analysis_agent import AnalysisAgent
 from agents.trend_agent import TrendAgent
 from agents.girlfriend.agent import GirlfriendAgent
+from agents.taste.agent import TasteAgent
 from agents.graph_states import OrchestratorState
 from llm.base import LLMProvider
 from rag.qdrant_service import QdrantService
@@ -67,6 +68,12 @@ class AgentOrchestrator:
             custom_system_prompt=self.custom_prompts.get("girlfriend")
         )
         
+        self.taste_agent = TasteAgent(
+            llm_provider=llm_provider,
+            language=language,
+            custom_system_prompt=self.custom_prompts.get("taste")
+        )
+        
         # Build orchestrator graph
         self.graph = self._build_graph()
         
@@ -82,6 +89,7 @@ class AgentOrchestrator:
         workflow.add_node("run_analysis", self._run_analysis_node)
         workflow.add_node("run_trend", self._run_trend_node)
         workflow.add_node("run_girlfriend", self._run_girlfriend_node)
+        workflow.add_node("run_taste", self._run_taste_node)
         workflow.add_node("finalize_result", self._finalize_result_node)
         
         # Define conditional routing
@@ -90,6 +98,8 @@ class AgentOrchestrator:
         def should_run_consultant(state: OrchestratorState) -> str:
             if "girlfriend" in state.get("agents_to_run", []):
                 return "run_girlfriend"
+            if "taste" in state.get("agents_to_run", []):
+                return "run_taste"
             if "consultant" in state.get("agents_to_run", []):
                 return "run_consultant"
             return "check_analysis"
@@ -109,13 +119,15 @@ class AgentOrchestrator:
             should_run_consultant,
             {
                 "run_girlfriend": "run_girlfriend",
+                "run_taste": "run_taste",
                 "run_consultant": "run_consultant",
                 "check_analysis": "run_analysis"
             }
         )
 
-        # girlfriend is a terminal single-agent flow
+        # girlfriend and taste are terminal single-agent flows
         workflow.add_edge("run_girlfriend", "finalize_result")
+        workflow.add_edge("run_taste", "finalize_result")
         
         workflow.add_conditional_edges(
             "run_consultant",
@@ -241,6 +253,52 @@ class AgentOrchestrator:
                 "error": str(e)
             }
     
+    async def run_taste_detection(
+        self,
+        user_id: str,
+        message: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        current_question_index: Optional[int] = None,
+        answers: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Run taste detection via TasteAgent
+        
+        Args:
+            user_id: User identifier
+            message: User message
+            conversation_history: Optional conversation history
+            current_question_index: Current question index in the taste detection flow
+            answers: Dictionary of answers so far
+        
+        Returns:
+            Dict with taste detection results
+        """
+        try:
+            logger.info(f"Running taste detection for user {user_id}")
+            
+            result = await self.taste_agent.process(
+                user_id=user_id,
+                message=message,
+                conversation_history=conversation_history,
+                current_question_index=current_question_index,
+                answers=answers
+            )
+            
+            return {
+                "status": "success",
+                "agent": "taste",
+                "result": result
+            }
+        
+        except Exception as e:
+            logger.error(f"Error in taste detection: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "agent": "taste",
+                "error": str(e)
+            }
+    
     async def _route_task_node(self, state: OrchestratorState) -> OrchestratorState:
         """Node: Route task to appropriate agents"""
         try:
@@ -251,6 +309,8 @@ class AgentOrchestrator:
                 agents_to_run = ["consultant"]
             elif task_type == "girlfriend":
                 agents_to_run = ["girlfriend"]
+            elif task_type == "taste":
+                agents_to_run = ["taste"]
             elif task_type == "analysis":
                 agents_to_run = ["analysis"]
             elif task_type == "trend":
@@ -331,6 +391,24 @@ class AgentOrchestrator:
             state["error"] = str(e)
         return state
     
+    async def _run_taste_node(self, state: OrchestratorState) -> OrchestratorState:
+        """Node: Run TasteAgent"""
+        try:
+            result = await self.taste_agent.process(
+                user_id=state["user_id"] or "anonymous",
+                message=state.get("message") or "",
+                conversation_history=state.get("conversation_history"),
+                current_question_index=state.get("current_question_index"),
+                answers=state.get("answers")
+            )
+            state["taste_result"] = result
+            state["completed_agents"] = state.get("completed_agents", []) + ["taste"]
+            state["step"] = "taste_completed"
+        except Exception as e:
+            logger.error(f"Error running taste: {e}", exc_info=True)
+            state["error"] = str(e)
+        return state
+    
     async def _finalize_result_node(self, state: OrchestratorState) -> OrchestratorState:
         """Node: Finalize and format results"""
         try:
@@ -341,6 +419,9 @@ class AgentOrchestrator:
             
             if state.get("consultant_result"):
                 final_result["consultant"] = state["consultant_result"]
+            
+            if state.get("taste_result"):
+                final_result["taste"] = state["taste_result"]
             
             if state.get("analysis_result"):
                 final_result["analysis"] = state["analysis_result"]
@@ -415,6 +496,11 @@ class AgentOrchestrator:
                 "status": "active",
                 "has_rag": False
             },
+            "taste_agent": {
+                "name": "TasteAgent",
+                "status": "active",
+                "has_rag": False
+            },
             "llm_provider": type(self.llm_provider).__name__,
             "rag_service_available": self.rag_service is not None
         }
@@ -445,7 +531,10 @@ class AgentOrchestrator:
                 "consultant_result": None,
                 "analysis_result": None,
                 "trend_result": None,
+                "taste_result": None,
                 "girlfriend_result": None,
+                "current_question_index": kwargs.get("current_question_index"),
+                "answers": kwargs.get("answers"),
                 "status": "pending",
                 "final_result": {},
                 "error": None,
