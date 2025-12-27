@@ -40,7 +40,7 @@ async def example_rag_usage():
     
     # 5. Example search without user preferences
     print("\n--- Example 1: Simple search ---")
-    query = "elegant gold ring for engagement"
+    query = "элегантное золотое кольцо для помолвки"
     result = await rag_retriever.retrieve_relevant_products(
         query=query,
         limit=3
@@ -52,17 +52,25 @@ async def example_rag_usage():
     
     # 6. Example search with user preferences
     print("\n--- Example 2: Search with user preferences ---")
-    user_preferences = {
-        "style_preference": "classic",
-        "budget_min": 20000,
-        "budget_max": 60000,
-        "preferred_materials": ["gold", "white_gold"],
-        "skin_tone": "warm",
-        "occasion_types": ["wedding", "formal"]
+    # user_preferences = {
+    #     "style_preference": "classic",
+    #     "budget_min": 20000,
+    #     "budget_max": 60000,
+    #     "preferred_materials": ["gold", "white_gold"],
+    #     "skin_tone": "warm",
+    #     "occasion_types": ["wedding", "formal"]
+    # }
+    user_preferences={
+        "budget_max": 300000,
+        "preferred_materials": [
+        "gold"
+        ],
+        "occasion_types": [],
+        "category": "rings"
     }
     
     result = await rag_retriever.retrieve_relevant_products(
-        query="wedding ring",
+        query="",
         user_preferences=user_preferences,
         limit=5,
         include_context=True
@@ -96,7 +104,7 @@ async def example_rag_usage():
     # 9. Example direct Qdrant search
     print("\n--- Example 5: Direct Qdrant search with filters ---")
     products = await qdrant_service.search(
-        query="modern bracelet",
+        query="современное браслет",
         limit=3,
         material_filter=["silver"],
         price_min=10000,
