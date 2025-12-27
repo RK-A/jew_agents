@@ -237,12 +237,11 @@ class GirlfriendAgent:
             if not content and accumulated_tool_results:
                 content = "\n\n".join(accumulated_tool_results)
 
-            return {"response": content, "zodiac_sign": state.get("zodiac_sign")}
+            state["response"] = content
+            return state
 
-        return {
-            "response": "Я не смогла корректно обработать запрос с инструментами. Попробуй переформулировать вопрос.",
-            "zodiac_sign": state.get("zodiac_sign"),
-        }
+        state["response"] = "Я не смогла корректно обработать запрос с инструментами. Попробуй переформулировать вопрос."
+        return state
     
     async def process(
         self,
