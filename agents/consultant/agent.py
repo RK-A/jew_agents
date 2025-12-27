@@ -127,7 +127,8 @@ If the customer hasn't shared their preferences yet, gently ask about:
             
             return {
                 "response": final_state["response"],
-                "recommendations": final_state["products"][:5],
+                "recommendations": final_state["recommendations"],
+                "products": final_state["products"],
                 "extracted_preferences": final_state["extracted_preferences"],
                 "has_profile": final_state["user_profile"] is not None,
                 "user_id": user_id

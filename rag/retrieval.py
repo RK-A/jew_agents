@@ -80,7 +80,7 @@ class RAGRetriever:
                     material_filter=material_filter,
                     price_min=price_min,
                     price_max=price_max,
-                    score_threshold=0.5
+                    score_threshold=0.45
                 )
             
             result = {
