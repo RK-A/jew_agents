@@ -388,7 +388,7 @@ class AgentOrchestrator:
     async def _run_trend_node(self, state: OrchestratorState) -> OrchestratorState:
         """Node: Run TrendAgent"""
         try:
-            result = await self.trend_agent.process(state.get("messages", ""))
+            result = await self.trend_agent.process(state.get("message", "") or '')
 
             # Update product trend scores if available
             if result.get("status") == "success" and self.rag_service:
