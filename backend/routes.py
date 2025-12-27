@@ -169,7 +169,7 @@ async def girlfriend_chat(
         )
 
         if result.get("status") == "success":
-            agent_block = (result.get("result") or {}).get("girlfriend") or {}
+            agent_block = result.get("result") or {}
             return GirlfriendChatResponse(
                 status="success",
                 agent="girlfriend",

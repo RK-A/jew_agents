@@ -91,7 +91,7 @@ class AgentOrchestrator:
         workflow.add_node("run_analysis", self._run_analysis_node)
         workflow.add_node("run_trend", self._run_trend_node)
         workflow.add_node("run_girlfriend", self._run_girlfriend_node)
-        workflow.add_node("run_taste", self._run_taste_node)
+        # workflow.add_node("run_taste", self._run_taste_node)
         workflow.add_node("finalize_result", self._finalize_result_node)
 
         # Define conditional routing
@@ -100,8 +100,8 @@ class AgentOrchestrator:
         def should_run_consultant(state: OrchestratorState) -> str:
             if "girlfriend" in state.get("agents_to_run", []):
                 return "run_girlfriend"
-            if "taste" in state.get("agents_to_run", []):
-                return "run_taste"
+            # if "taste" in state.get("agents_to_run", []):
+            #     return "run_taste"
             if "analysis" in state.get("agents_to_run", []):
                 return "run_analysis"
             if "trend" in state.get("agents_to_run", []):
@@ -115,7 +115,7 @@ class AgentOrchestrator:
             should_run_consultant,
             {
                 "run_girlfriend": "run_girlfriend",
-                "run_taste": "run_taste",
+                # "run_taste": "run_taste",
                 "run_consultant": "run_consultant",
                 "run_analysis": "run_analysis",
                 "run_trend": "run_trend",
@@ -124,7 +124,7 @@ class AgentOrchestrator:
 
         # girlfriend and taste are terminal single-agent flows
         workflow.add_edge("run_girlfriend", "finalize_result")
-        workflow.add_edge("run_taste", "finalize_result")
+        # workflow.add_edge("run_taste", "finalize_result")
         workflow.add_edge("run_consultant", "finalize_result")
         workflow.add_edge("run_analysis", "finalize_result")
         workflow.add_edge("run_trend", "finalize_result")
@@ -388,7 +388,7 @@ class AgentOrchestrator:
     async def _run_trend_node(self, state: OrchestratorState) -> OrchestratorState:
         """Node: Run TrendAgent"""
         try:
-            result = await self.trend_agent.process(state.get("messages", ""))
+            result = await self.trend_agent.process(state.get("message", "") or '')
 
             # Update product trend scores if available
             if result.get("status") == "success" and self.rag_service:
@@ -537,12 +537,11 @@ class AgentOrchestrator:
         user_prompt = f"""Ты — интеллектуальный маршрутизатор для ИИ-ассистента ювелирного магазина.
         Твоя задача — проанализировать сообщение пользователя и историю диалога, чтобы выбрать наиболее подходящего агента.
 
-        ДОСТУПНЫЕ АГЕНТЫ:
+        ДОСТУПНЫЕ АГЕНТЫ (в порядке приоритета):
         1. "consultation": Вопросы о конкретных товарах, материалах (золото, серебро, пробы), характеристиках, весе, размерах, наличии, доставке или цене. Фактические вопросы.
         2. "girlfriend": Запросы совета по стилю ("подойдет ли мне?", "с чем носить?"), просьба высказать мнение, эмоциональное общение, поддержка выбора подарка, "подружка".
-        3. "taste": Запросы на определение стиля пользователя, получение овета на вопрос, выявление предпочтений, диагностика вкуса.
-        4. "trend": Анализ статей, модных журналов, вопросы о моде, трендах, что сейчас популярно, новинки сезона.
-        5. "analysis": Запросы отчетов, статистики продаж, аналитика данных (административные запросы).
+        3. "trend": Анализ статей, модных журналов, вопросы о моде, трендах, что сейчас популярно, новинки сезона.
+        4. "analysis": Запросы отчетов, статистики продаж, аналитика данных (административные запросы).
 
         ФОРМАТ ОТВЕТА:
         Верни ТОЛЬКО валидный JSON объект без markdown форматирования:
@@ -553,8 +552,6 @@ class AgentOrchestrator:
         }}
 
         ПРАВИЛА:
-        - Если пользователь просто здоровается ("привет", "начать"), выбирай "taste" с низкой уверенностью (0.3).
-        - Если пользователь отвечает на вопрос о вкусе, выбирай "taste".
         - Если запрос неясен, выбирай "girlfriend".
         - Если запрос смешанный, выбирай агента, который лучше подходит под *основную* цель вопроса.
         
