@@ -20,5 +20,4 @@ class AnalysisState(TypedDict):
     report: Optional[str]
 
     total_customers: int
-    generated_at: Optional[str]
     language: str

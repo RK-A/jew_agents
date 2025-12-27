@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Dict, Any
 
 from backend.schemas import (
+    ChatRequest,
+    ChatResponse,
     ConsultationRequest,
     ConsultationResponse,
     GirlfriendChatRequest,
@@ -44,6 +46,42 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
 
 
+@router.post(
+    "/orchestrator/{user_id}",
+    response_model=ChatResponse
+)
+async def orchestrator(
+        user_id: str,
+        request: ChatRequest,
+        orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """Обработка сообщения пользователя"""
+    try:
+        logger.info(f"Orchestrator request from user {user_id}")
+        result = await orchestrator.handle_user_message(
+            user_id=user_id,
+            message=request.message,
+            conversation_history=request.conversation_history,
+            explicit_task_type=request.explicit_task_type
+        )
+
+        return ChatResponse(
+            status=result.get("status", "success"),
+            task_type=result.get("task_type"),
+            response=result.get("result"),
+            error=result.get("error"),
+            completed_agents=result.get("completed_agents", [])
+        )
+
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        return ChatResponse(
+            status="error",
+            error=str(e),
+            task_type=None,
+        )
+
+
 # Consultation endpoints
 @router.post(
     "/consultation/{user_id}",
@@ -58,36 +96,37 @@ async def consultation(
 ):
     """
     Handle user consultation request
-    
+
     Args:
         user_id: User identifier
         request: Consultation request with message and optional history
         orchestrator: Agent orchestrator dependency
-    
+
     Returns:
         ConsultationResponse with recommendations and agent response
     """
     try:
         logger.info(f"Consultation request from user {user_id}")
-        
+
         # Process consultation through orchestrator
-        result = await orchestrator.handle_user_consultation(
+        result = await orchestrator.handle_user_orchestrator(
             user_id=user_id,
             message=request.message,
             conversation_history=request.conversation_history
         )
-        
+
         # Extract data from result
         if result.get("status") == "success":
             agent_result = result.get("result", {})
-            
+
             return ConsultationResponse(
                 status="success",
                 agent="consultant",
                 products=agent_result.get("products"),
                 response=agent_result.get("response"),
                 recommendations=agent_result.get("recommendations"),
-                extracted_preferences=agent_result.get("extracted_preferences"),
+                extracted_preferences=agent_result.get(
+                    "extracted_preferences"),
                 questions_for_user=agent_result.get("questions_for_user")
             )
         else:
@@ -96,9 +135,10 @@ async def consultation(
                 agent="consultant",
                 error=result.get("error", "Unknown error occurred")
             )
-    
+
     except Exception as e:
-        logger.error(f"Consultation error for user {user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Consultation error for user {user_id}: {e}", exc_info=True)
         return ConsultationResponse(
             status="error",
             agent="consultant",
@@ -121,11 +161,11 @@ async def girlfriend_chat(
     try:
         logger.info(f"Girlfriend chat request from user {user_id}")
 
-        result = await orchestrator.handle_multi_agent_task(
-            task_type="girlfriend",
+        result = await orchestrator.run_girlfriend_answer(
             user_id=user_id,
             message=request.message,
             conversation_history=request.conversation_history,
+            zodiac_sign=request.zodiac_sign,
         )
 
         if result.get("status") == "success":
@@ -144,7 +184,8 @@ async def girlfriend_chat(
         )
 
     except Exception as e:
-        logger.error(f"Girlfriend chat error for user {user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Girlfriend chat error for user {user_id}: {e}", exc_info=True)
         return GirlfriendChatResponse(
             status="error",
             agent="girlfriend",
@@ -166,18 +207,18 @@ async def taste_detection(
 ):
     """
     Handle taste detection request
-    
+
     Args:
         user_id: User identifier
         request: Taste detection request with message and optional state
         orchestrator: Agent orchestrator dependency
-    
+
     Returns:
         TasteDetectionResponse with taste analysis results
     """
     try:
         logger.info(f"Taste detection request from user {user_id}")
-        
+
         result = await orchestrator.run_taste_detection(
             user_id=user_id,
             message=request.message,
@@ -185,16 +226,17 @@ async def taste_detection(
             current_question_index=request.current_question_index,
             answers=request.answers
         )
-        
+
         # Extract data from result
         if result.get("status") == "success":
             agent_result = result.get("result", {})
-            
+
             return TasteDetectionResponse(
                 status="success",
                 agent="taste",
                 response=agent_result.get("response"),
-                current_question_index=agent_result.get("current_question_index"),
+                current_question_index=agent_result.get(
+                    "current_question_index"),
                 answers=agent_result.get("answers"),
                 jewelry_profile=agent_result.get("jewelry_profile")
             )
@@ -204,9 +246,10 @@ async def taste_detection(
                 agent="taste",
                 error=result.get("error", "Unknown error occurred")
             )
-    
+
     except Exception as e:
-        logger.error(f"Taste detection error for user {user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Taste detection error for user {user_id}: {e}", exc_info=True)
         return TasteDetectionResponse(
             status="error",
             agent="taste",
@@ -223,23 +266,24 @@ async def taste_detection(
 )
 async def get_customer_profile(
     user_id: str,
-    preference_repo: CustomerPreferenceRepository = Depends(get_preference_repository)
+    preference_repo: CustomerPreferenceRepository = Depends(
+        get_preference_repository)
 ):
     """
     Get customer profile by user ID
-    
+
     Args:
         user_id: User identifier
         preference_repo: Customer preference repository dependency
-    
+
     Returns:
         CustomerProfileResponse with user preferences
     """
     try:
         logger.info(f"Fetching profile for user {user_id}")
-        
+
         profile = await preference_repo.get(user_id)
-        
+
         if profile is None:
             # Return empty profile for new user
             return CustomerProfileResponse(
@@ -252,11 +296,12 @@ async def get_customer_profile(
                 occasion_types=None,
                 consultation_history=[]
             )
-        
+
         return CustomerProfileResponse.model_validate(profile)
-    
+
     except Exception as e:
-        logger.error(f"Error fetching profile for user {user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Error fetching profile for user {user_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch customer profile: {str(e)}"
@@ -272,29 +317,30 @@ async def get_customer_profile(
 async def update_customer_preferences(
     user_id: str,
     preferences: CustomerPreferenceUpdate,
-    preference_repo: CustomerPreferenceRepository = Depends(get_preference_repository)
+    preference_repo: CustomerPreferenceRepository = Depends(
+        get_preference_repository)
 ):
     """
     Update customer preferences
-    
+
     Args:
         user_id: User identifier
         preferences: Preference updates
         preference_repo: Customer preference repository dependency
-    
+
     Returns:
         CustomerPreferenceUpdateResponse with status
     """
     try:
         logger.info(f"Updating preferences for user {user_id}")
-        
+
         # Get existing profile or create new
         existing = await preference_repo.get(user_id)
-        
+
         # Prepare update data
         update_data = preferences.model_dump(exclude_unset=True)
         updated_fields = list(update_data.keys())
-        
+
         if existing:
             # Update existing profile
             for key, value in update_data.items():
@@ -307,16 +353,17 @@ async def update_customer_preferences(
                 **update_data
             )
             updated = await preference_repo.create(new_preference)
-        
+
         return CustomerPreferenceUpdateResponse(
             status="success",
             user_id=user_id,
             updated_fields=updated_fields,
             message=f"Successfully updated {len(updated_fields)} fields"
         )
-    
+
     except Exception as e:
-        logger.error(f"Error updating preferences for user {user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Error updating preferences for user {user_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update preferences: {str(e)}"
@@ -335,21 +382,21 @@ async def customer_analysis(
 ):
     """
     Run customer analysis via AnalysisAgent
-    
+
     Args:
         orchestrator: Agent orchestrator dependency
-    
+
     Returns:
         AnalysisReportResponse with analysis results
     """
     try:
         logger.info("Running customer analysis")
-        
+
         result = await orchestrator.run_customer_analysis()
-        
+
         if result.get("status") == "success":
             agent_result = result.get("result", {})
-            
+
             return AnalysisReportResponse(
                 status="success",
                 agent="analysis",
@@ -367,7 +414,7 @@ async def customer_analysis(
                 agent="analysis",
                 error=result.get("error", "Unknown error occurred")
             )
-    
+
     except Exception as e:
         logger.error(f"Customer analysis error: {e}", exc_info=True)
         return AnalysisReportResponse(
@@ -389,22 +436,23 @@ async def trend_analysis(
 ):
     """
     Run trend analysis via TrendAgent
-    
+
     Args:
         request: Trend analysis request with content
         orchestrator: Agent orchestrator dependency
-    
+
     Returns:
         TrendReportResponse with trend analysis results
     """
     try:
-        logger.info(f"Running trend analysis on content from {request.source or 'unknown source'}")
-        
+        logger.info(
+            f"Running trend analysis on content from {request.source or 'unknown source'}")
+
         result = await orchestrator.run_trend_analysis(request.content)
-        
+
         if result.get("status") == "success":
             agent_result = result.get("result", {})
-            
+
             return TrendReportResponse(
                 status="success",
                 agent="trend",
@@ -421,7 +469,7 @@ async def trend_analysis(
                 agent="trend",
                 error=result.get("error", "Unknown error occurred")
             )
-    
+
     except Exception as e:
         logger.error(f" r: {e}", exc_info=True)
         return TrendReportResponse(
@@ -445,23 +493,23 @@ async def search_products(
 ):
     """
     Search for products using semantic search
-    
+
     Args:
         request: Product search request
         qdrant_service: Qdrant service dependency
         product_repo: Product repository dependency
-    
+
     Returns:
         ProductSearchResponse with found products
     """
     try:
         logger.info(f"Product search: {request.query}")
-        
+
         if qdrant_service is None:
             # Fallback to database search if Qdrant unavailable
             logger.warning("Qdrant unavailable, using database fallback")
             products = await product_repo.search_by_text(request.query, limit=request.limit)
-            
+
             product_list = [
                 ProductInfo(
                     id=p.id,
@@ -478,21 +526,21 @@ async def search_products(
                 )
                 for p in products
             ]
-            
+
             return ProductSearchResponse(
                 status="success",
                 query=request.query,
                 products=product_list,
                 total_found=len(product_list)
             )
-        
+
         # Use Qdrant for semantic search
         results = await qdrant_service.search(
             query=request.query,
             limit=request.limit,
             score_threshold=0.5
         )
-        
+
         product_list = []
         for result in results:
             payload = result.get("payload", {})
@@ -509,14 +557,14 @@ async def search_products(
                 stock_count=payload.get("stock_count", 0),
                 score=result.get("score")
             ))
-        
+
         return ProductSearchResponse(
             status="success",
             query=request.query,
             products=product_list,
             total_found=len(product_list)
         )
-    
+
     except Exception as e:
         logger.error(f"Product search error: {e}", exc_info=True)
         return ProductSearchResponse(
@@ -541,26 +589,26 @@ async def health_check(
 ):
     """
     Comprehensive health check
-    
+
     Args:
         orchestrator: Agent orchestrator dependency
         qdrant_service: Qdrant service dependency
-    
+
     Returns:
         HealthResponse with system status
     """
     try:
         # Check database
         db_healthy = await check_database_health()
-        
+
         # Check Qdrant
         qdrant_healthy = await check_qdrant_health(qdrant_service)
-        
+
         # Get agent status
         agents_status = await orchestrator.get_agent_status()
-        
+
         overall_status = "healthy" if db_healthy else "unhealthy"
-        
+
         return HealthResponse(
             status=overall_status,
             provider=settings.llm_provider,
@@ -569,7 +617,7 @@ async def health_check(
             qdrant_connected=qdrant_healthy,
             agents_status=agents_status
         )
-    
+
     except Exception as e:
         logger.error(f"Health check error: {e}", exc_info=True)
         return HealthResponse(
@@ -580,5 +628,3 @@ async def health_check(
             qdrant_connected=False,
             agents_status=None
         )
-
-

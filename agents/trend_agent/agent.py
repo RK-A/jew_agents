@@ -1,11 +1,11 @@
 from langgraph.graph import StateGraph, START, END
 from .utils.state import TrendState
 from .utils.nodes import (
-    extraction_node, 
-    calculation_node, 
+    extraction_node,
+    calculation_node,
 )
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 
 import json
 from agents.base_agent import BaseAgent
@@ -13,18 +13,15 @@ from agents.base_agent import BaseAgent
 logger = logging.getLogger(__name__)
 
 
-
-
 class TrendAgent(BaseAgent):
     """Agent for analyzing fashion trends from journals and articles using LangGraph"""
-    
+
     DEFAULT_SYSTEM_PROMPT = """Ты эксперт-аналитик моды. Отвечай только в формате JSON."""
-    
-    
-    def __init__(self, llm_provider, rag_service=None, language: str = "auto", custom_system_prompt: str = None):
+
+    def __init__(self, llm_provider, rag_service=None, language: str = "auto", custom_system_prompt: Optional[str] = None):
         super().__init__(llm_provider, rag_service, language, custom_system_prompt)
         self.graph = self._build_graph()
-    
+
     def _build_graph(self) -> StateGraph:
         """Build LangGraph workflow for trend analysis process"""
         workflow = StateGraph(TrendState)
@@ -41,22 +38,23 @@ class TrendAgent(BaseAgent):
         workflow.add_edge("analyze", "calculate")
         workflow.add_edge("calculate", "report")
         workflow.add_edge("report", END)
-        
+
         return workflow.compile()
-    
+
     async def process(self, content: str) -> Dict[str, Any]:
         """
         Process trend analysis from fashion journal content using LangGraph workflow
-        
+
         Args:
             content: Fashion journal article or content text
-        
+
         Returns:
             Dict with trends, keywords, and recommendations
         """
         try:
-            self.logger.info(f"Starting trend analysis on {len(content)} characters of content...")
-            
+            self.logger.info(
+                f"Starting trend analysis on {len(content)} characters of content...")
+
             # Initialize state
             initial_state: TrendState = {
                 "content": content,
@@ -67,17 +65,17 @@ class TrendAgent(BaseAgent):
                 "recommendations": [],
                 "report": ""
             }
-            
+
             # Run graph
             final_state = await self.graph.ainvoke(initial_state)
-            
+
             # Return result
             if final_state.get("error"):
                 return {
                     "status": "error",
                     "message": final_state["error"]
                 }
-            
+
             return {
                 "status": "success",
                 "extracted_keywords": final_state["extracted_keywords"],
@@ -88,19 +86,19 @@ class TrendAgent(BaseAgent):
                 "report": final_state["report"],
                 "content_length": len(content)
             }
-        
+
         except Exception as e:
             self.logger.error(f"Error in trend analysis: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": str(e)
             }
-    
+
     async def _analysis_node(self, state: TrendState):
         print("--- [2/4] Analyzing Trends (LLM) ---")
         content = state["content"]
         keywords = state["extracted_keywords"]
-        
+
         # 1. Используем ПОЛНЫЙ промпт из оригинального trend_agent.py
         prompt = f"""Проанализируй текст о моде и извлеки ювелирные тренды.
         
@@ -127,7 +125,6 @@ class TrendAgent(BaseAgent):
         }}
 
         JSON:"""
-        
 
         response = await self.llm.generate(
             prompt=prompt,
@@ -137,11 +134,22 @@ class TrendAgent(BaseAgent):
         # 2. Улучшенная очистка JSON (как в оригинале + защита от markdown)
         txt = response
         # Удаляем ```json и ```
-        if txt.startswith("```json"):
-            txt = txt.split("```json").split("```").strip()[1]
-        elif txt.startswith("```"):
-            txt = txt.split("```")[6].split("```")[0].strip()
-            
+        try:
+            if txt.startswith("```json"):
+                start_index = txt.find("{")
+                end_index = txt.rfind("}")
+                txt = txt[start_index:end_index].strip()
+            elif txt.startswith("```"):
+                txt = txt.split("```")[6].split("```")[0].strip()
+        except Exception as e:
+            trends = {
+                "trending_styles": [kw["keyword"] for kw in keywords.get("styles", [])[:5]],
+                "popular_materials": [kw["keyword"] for kw in keywords.get("materials", [])[:5]],
+                "trending_colors": [kw["keyword"] for kw in keywords.get("colors", [])[:3]],
+                "mentioned_designers": [],
+                "seasonal_forecast": "Unable to determine from LLM error"
+            }
+
         try:
             trends = json.loads(txt)
         except Exception as e:
@@ -154,12 +162,12 @@ class TrendAgent(BaseAgent):
                 "mentioned_designers": [],
                 "seasonal_forecast": "Unable to determine from LLM error"
             }
-            
+
         return {"trends": trends}
 
     async def _reporting_node(self, state: TrendState):
         print("--- [4/4] Writing Report ---")
-        
+
         # Контекст как в оригинале _generate_trend_report
         context = f"""
         === Извлеченные ключевые слова ===
@@ -174,7 +182,7 @@ class TrendAgent(BaseAgent):
         === Рекомендации ===
         {json.dumps(state['recommendations'], indent=2, ensure_ascii=False)}
         """
-        
+
         prompt = f"""Ты — старший аналитик моды, специализирующийся на ювелирных изделиях и аксессуарах.
         На основе проведенного анализа сформируй подробный профессиональный отчет о трендах:
         {context}
@@ -205,8 +213,8 @@ class TrendAgent(BaseAgent):
         
         Стиль письма: Деловой, лаконичный, без воды. Используй жирный шрифт для акцентов.
         """
-        
+
         response = await self.llm.generate(
             prompt=prompt
-            )
+        )
         return {"report": response}

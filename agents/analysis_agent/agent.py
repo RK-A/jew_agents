@@ -24,6 +24,7 @@ from .routing import (
     route_to_next_module,
 )
 
+
 class AnalysisAgent(BaseAgent):
     """
     Агент анализа для ювелирного магазина.
@@ -119,7 +120,6 @@ class AnalysisAgent(BaseAgent):
                 "customer_segments": [],
                 "report": None,
                 "total_customers": 0,
-                "generated_at": datetime.utcnow().isoformat(),
             }
 
             # Запускаем граф
@@ -143,13 +143,13 @@ class AnalysisAgent(BaseAgent):
     async def process(self) -> Dict[str, Any]:
         """
         Process customer analysis using LangGraph workflow
-        
+
         Returns:
             Dict with analysis results, trends, and recommendations
         """
         try:
             self.logger.info("Starting customer analysis...")
-            
+
             # Initialize state
             initial_state: AnalysisState = {
                 "consultation_records": [],
@@ -158,7 +158,6 @@ class AnalysisAgent(BaseAgent):
                 "demand_forecast": {},
                 "customer_segments": [],
                 "report": "",
-                "error": None,
                 "step": "start",
                 "language": self.language,
                 "status": "started",
@@ -168,18 +167,17 @@ class AnalysisAgent(BaseAgent):
                 "raw_data": [],
                 "total_customers": 0,
             }
-        
-            
+
             # Run graph
             final_state = await self.graph.ainvoke(initial_state)
-            
+
             # Return result
             if final_state.get("error"):
                 return {
                     "status": "error",
                     "message": final_state["error"]
                 }
-            
+
             return {
                 "status": "success",
                 "report": final_state["report"],
@@ -188,11 +186,11 @@ class AnalysisAgent(BaseAgent):
                 "demand_forecast": final_state["demand_forecast"],
                 "customer_segments": final_state["customer_segments"],
                 "total_customers": final_state['total_customers'],
-                "generated_at": datetime.now().isoformat()
             }
-        
+
         except Exception as e:
-            self.logger.error(f"Error in customer analysis: {e}", exc_info=True)
+            self.logger.error(
+                f"Error in customer analysis: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": str(e)
@@ -212,7 +210,6 @@ class AnalysisAgent(BaseAgent):
         result: Dict[str, Any] = {
             "status": state.get("status", "error"),
             "total_customers": state.get("total_customers", 0),
-            "generated_at": state.get("generated_at"),
         }
 
         if state["modules"] is None:
@@ -238,7 +235,6 @@ class AnalysisAgent(BaseAgent):
             result["error"] = state["error_message"]
 
         return result
-
 
     async def _node_generate_report(self, state: AnalysisState) -> Dict[str, Any]:
         """
@@ -306,7 +302,6 @@ class AnalysisAgent(BaseAgent):
                 "status": "success",
                 "error_message": f"Report generation warning: {str(e)}",
             }
-
 
     async def _node_classify_modules(
         self,

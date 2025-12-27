@@ -2,7 +2,7 @@
 
 import re
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, cast
 from datetime import datetime
 
 from langgraph.graph import StateGraph, END
@@ -27,7 +27,7 @@ def _clean_thinking_blocks(text: str) -> str:
 
 class ConsultantAgent(BaseAgent):
     """Agent for interactive jewelry consultation and recommendations using LangGraph"""
-    
+
     DEFAULT_SYSTEM_PROMPT = """You are an expert jewelry consultant with deep knowledge of precious metals, gemstones, and fashion trends.
 Your role is to help customers find the perfect jewelry by understanding their preferences, style, budget, and occasion.
 
@@ -50,24 +50,25 @@ If the customer hasn't shared their preferences yet, gently ask about:
 - Preferred materials (gold, silver, platinum, etc.)
 - Skin tone (to recommend complementary metals)
 """
-    
-    def __init__(self, llm_provider, rag_service, language: str = "auto", custom_system_prompt: str = None):
+
+    def __init__(self, llm_provider, rag_service, language: str = "auto", custom_system_prompt: Optional[str] = None):
         super().__init__(llm_provider, rag_service, language, custom_system_prompt)
         self.rag_retriever = RAGRetriever(rag_service) if rag_service else None
         self.graph = self._build_graph()
-    
+
     def _build_graph(self) -> StateGraph:
         """Build LangGraph workflow for consultation process"""
         workflow = StateGraph(ConsultantState)
-        
+
         # Add nodes
         workflow.add_node("load_profile", self._load_profile_node)
-        workflow.add_node("extract_preferences", self._extract_preferences_node)
+        workflow.add_node("extract_preferences",
+                          self._extract_preferences_node)
         workflow.add_node("search_products", self._search_products_node)
         workflow.add_node("generate_response", self._generate_response_node)
         workflow.add_node("update_profile", self._update_profile_node)
         workflow.add_node("log_interaction", self._log_interaction_node)
-        
+
         # Define edges
         workflow.set_entry_point("load_profile")
         workflow.add_edge("load_profile", "extract_preferences")
@@ -76,9 +77,9 @@ If the customer hasn't shared their preferences yet, gently ask about:
         workflow.add_edge("generate_response", "update_profile")
         workflow.add_edge("update_profile", "log_interaction")
         workflow.add_edge("log_interaction", END)
-        
+
         return workflow.compile()
-    
+
     async def process(
         self,
         user_id: str,
@@ -87,18 +88,19 @@ If the customer hasn't shared their preferences yet, gently ask about:
     ) -> Dict[str, Any]:
         """
         Process consultation request using LangGraph workflow
-        
+
         Args:
             user_id: User identifier
             message: User message/query
             conversation_history: Optional previous conversation messages
-        
+
         Returns:
             Dict with recommendations, questions, and extracted preferences
         """
         try:
-            self.logger.info(f"Processing consultation for user {user_id}: {message[:50]}...")
-            
+            self.logger.info(
+                f"Processing consultation for user {user_id}: {message[:50]}...")
+
             # Initialize state
             initial_state: ConsultantState = {
                 "user_id": user_id,
@@ -112,10 +114,10 @@ If the customer hasn't shared their preferences yet, gently ask about:
                 "error": None,
                 "step": "start"
             }
-            
+
             # Run graph
             final_state = await self.graph.ainvoke(initial_state)
-            
+
             # Return result
             if final_state.get("error"):
                 return {
@@ -124,7 +126,7 @@ If the customer hasn't shared their preferences yet, gently ask about:
                     "extracted_preferences": {},
                     "error": final_state["error"]
                 }
-            
+
             return {
                 "response": final_state["response"],
                 "recommendations": final_state["products"][:5],
@@ -132,16 +134,17 @@ If the customer hasn't shared their preferences yet, gently ask about:
                 "has_profile": final_state["user_profile"] is not None,
                 "user_id": user_id
             }
-        
+
         except Exception as e:
-            self.logger.error(f"Error processing consultation for user {user_id}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error processing consultation for user {user_id}: {e}", exc_info=True)
             return {
                 "response": "Извините, произошла ошибка. Пожалуйста, попробуйте еще раз.",
                 "recommendations": [],
                 "extracted_preferences": {},
                 "error": str(e)
             }
-    
+
     async def _load_profile_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Load customer profile from database"""
         try:
@@ -152,26 +155,27 @@ If the customer hasn't shared their preferences yet, gently ask about:
             logger.error(f"Error loading profile: {e}", exc_info=True)
             state["error"] = str(e)
         return state
-    
+
     async def _extract_preferences_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Extract preferences from user message"""
         try:
             extracted_prefs = await self._extract_preferences_from_message(state["message"])
             state["extracted_preferences"] = extracted_prefs
-            
+
             # Merge with existing profile
             if state["user_profile"]:
-                merged_prefs = self._merge_preferences(state["user_profile"], extracted_prefs)
+                merged_prefs = self._merge_preferences(
+                    state["user_profile"], extracted_prefs)
                 state["user_profile"] = merged_prefs
             else:
                 state["user_profile"] = extracted_prefs
-            
+
             state["step"] = "preferences_extracted"
         except Exception as e:
             logger.error(f"Error extracting preferences: {e}", exc_info=True)
             state["error"] = str(e)
         return state
-    
+
     async def _search_products_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Search products via RAG"""
         try:
@@ -190,7 +194,7 @@ If the customer hasn't shared their preferences yet, gently ask about:
             logger.error(f"Error searching products: {e}", exc_info=True)
             state["error"] = str(e)
         return state
-    
+
     async def _generate_response_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Generate consultation response via LLM"""
         try:
@@ -201,13 +205,14 @@ If the customer hasn't shared their preferences yet, gently ask about:
                 conversation_history=state["conversation_history"]
             )
             state["response"] = response
-            state["recommendations"] = self._extract_product_ids(state["products"][:5])
+            state["recommendations"] = self._extract_product_ids(
+                state["products"][:5])
             state["step"] = "response_generated"
         except Exception as e:
             logger.error(f"Error generating response: {e}", exc_info=True)
             state["error"] = str(e)
         return state
-    
+
     async def _update_profile_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Update customer preferences in database"""
         try:
@@ -223,7 +228,7 @@ If the customer hasn't shared their preferences yet, gently ask about:
             logger.error(f"Error updating profile: {e}", exc_info=True)
             # Don't fail the whole process if profile update fails
         return state
-    
+
     async def _log_interaction_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Log interaction to database"""
         try:
@@ -240,30 +245,31 @@ If the customer hasn't shared their preferences yet, gently ask about:
             logger.error(f"Error logging interaction: {e}", exc_info=True)
             # Don't fail the whole process if logging fails
         return state
-    
+
     async def _get_customer_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get customer profile from database"""
         try:
             async with async_session_factory() as session:
                 repo = CustomerPreferenceRepository(session)
                 preference = await repo.get_by_user_id(user_id)
-                
+
                 if not preference:
                     return None
-                
+
                 return {
                     "user_id": preference.user_id,
                     "style_preference": preference.style_preference,
-                    "budget_min": float(preference.budget_min) if preference.budget_min else None,
-                    "budget_max": float(preference.budget_max) if preference.budget_max else None,
+                    "budget_min": cast(Optional[float], preference.budget_min),
+                    "budget_max": cast(Optional[float], preference.budget_max),
                     "preferred_materials": preference.preferred_materials or [],
                     "skin_tone": preference.skin_tone,
                     "occasion_types": preference.occasion_types or [],
                 }
         except Exception as e:
-            self.logger.error(f"Error getting customer profile {user_id}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error getting customer profile {user_id}: {e}", exc_info=True)
             return None
-    
+
     async def _extract_preferences_from_message(self, message: str) -> Dict[str, Any]:
         """Extract preferences from user message using LLM"""
         try:
@@ -282,29 +288,31 @@ Return ONLY valid JSON with these fields (use null for missing info):
 Customer message: "{message}"
 
 JSON:"""
-            
+
             response = await self.llm.generate(
                 prompt=extraction_prompt,
                 temperature=0.3
             )
-            
+
             # Parse JSON response
             import json
             response_clean = response.strip()
             if response_clean.startswith("```json"):
-                response_clean = response_clean.split("```json")[1].split("```")[0].strip()
+                response_clean = response_clean.split(
+                    "```json")[1].split("```")[0].strip()
             elif response_clean.startswith("```"):
-                response_clean = response_clean.split("```")[1].split("```")[0].strip()
-            
+                response_clean = response_clean.split(
+                    "```")[1].split("```")[0].strip()
+
             extracted = json.loads(response_clean)
-            
+
             # Filter out null values
             return {k: v for k, v in extracted.items() if v not in (None, "null", "")}
-        
+
         except Exception as e:
             self.logger.warning(f"Error extracting preferences: {e}")
             return {}
-    
+
     def _merge_preferences(
         self,
         existing: Dict[str, Any],
@@ -312,20 +320,21 @@ JSON:"""
     ) -> Dict[str, Any]:
         """Merge new preferences with existing ones"""
         merged = existing.copy()
-        
+
         for key, value in new.items():
             if value is not None:
                 if key in ["preferred_materials", "occasion_types"]:
                     # Merge lists
                     existing_list = set(merged.get(key, []))
-                    new_list = set(value if isinstance(value, list) else [value])
+                    new_list = set(value if isinstance(
+                        value, list) else [value])
                     merged[key] = list(existing_list | new_list)
                 else:
                     # Override with new value
                     merged[key] = value
-        
+
         return merged
-    
+
     async def _generate_consultation_response(
         self,
         message: str,
@@ -340,7 +349,7 @@ JSON:"""
                 user_profile=user_profile,
                 products=products
             )
-            
+
             # Build conversation history
             history_text = ""
             if conversation_history:
@@ -350,12 +359,12 @@ JSON:"""
                     content = msg.get("content", "")
                     history_parts.append(f"{role.capitalize()}: {content}")
                 history_text = "\n".join(history_parts)
-            
+
             # Prepare history section for prompt
             history_section = f"Previous conversation:\n{history_text}" if history_text else ""
-            
+
             system_prompt = self.get_system_prompt(self.DEFAULT_SYSTEM_PROMPT)
-            
+
             prompt = f"""{system_prompt}
 
 {context}
@@ -365,18 +374,18 @@ JSON:"""
 Customer: {message}
 
 Consultant:"""
-            
+
             response = await self.llm.generate(
                 prompt=prompt,
                 temperature=0.7
             )
-            
+
             return _clean_thinking_blocks(response)
-        
+
         except Exception as e:
             self.logger.error(f"Error generating response: {e}", exc_info=True)
             return "Извините, не могу сформировать ответ. Попробуйте переформулировать вопрос."
-    
+
     async def _update_customer_preferences(
         self,
         user_id: str,
@@ -387,7 +396,7 @@ Consultant:"""
         try:
             async with async_session_factory() as session:
                 repo = CustomerPreferenceRepository(session)
-                
+
                 # Prepare data
                 pref_data = {
                     "user_id": user_id,
@@ -399,19 +408,19 @@ Consultant:"""
                     "occasion_types": preferences.get("occasion_types", []),
                     "last_updated": datetime.now()
                 }
-                
+
                 if is_new:
                     pref_data["created_at"] = datetime.now()
                     pref_data["consultation_history"] = []
                     await repo.create(pref_data)
                 else:
                     await repo.update(user_id, pref_data)
-                
+
                 await session.commit()
                 self.logger.info(f"Updated preferences for user {user_id}")
                 return True
-        
-        except Exception as e:
-            self.logger.error(f"Error updating preferences for user {user_id}: {e}", exc_info=True)
-            return False
 
+        except Exception as e:
+            self.logger.error(
+                f"Error updating preferences for user {user_id}: {e}", exc_info=True)
+            return False

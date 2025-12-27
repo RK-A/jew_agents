@@ -1,4 +1,4 @@
 
-from .agent import TasteDetectionAgent
+from .agent import TasteAgent
 
-__all__ = ["TasteDetectionAgent"]
+__all__ = ["TasteAgent"]
