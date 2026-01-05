@@ -4,14 +4,14 @@ services:
     container_name: jewelry_postgres
     environment:
       POSTGRES_DB: jewelry
-      POSTGRES_USER: "agents"
-      POSTGRES_PASSWORD: "UMb1IL"
+      POSTGRES_USER: "${POSTGRES_USER:-agents}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-UMb1IL}"
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agents -d jewelry"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agents} -d jewelry"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -38,7 +38,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # - POSTGRES_URL=postgresql+asyncpg://agents:UMb1IL@postgres:5433/jewelry
+      - POSTGRES_URL=${POSTGRES_URL:-postgresql+asyncpg://agents:UMb1IL@postgres:5432/jewelry}
       - QDRANT_URL=http://qdrant:6333
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_MODEL=${LLM_MODEL:-gpt-4}

@@ -18,7 +18,7 @@ class OpenAIProvider(LLMProvider):
         model: str = "gpt-4",
         temperature: float = 0.7,
         embedding_model: str = "text-embedding-3-small",
-        timeout: float = 60.0,
+        timeout: float = 300.0,
         max_retries: int = 3,
         base_url: str = "https://api.openai.com/v1"
     ):

@@ -146,6 +146,127 @@ If the customer hasn't shared their preferences yet, gently ask about:
                 "error": str(e)
             }
 
+    async def process_stream(
+        self,
+        user_id: str,
+        message: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ):
+        """
+        Process consultation request with token-by-token streaming using LangGraph
+
+        Args:
+            user_id: User identifier
+            message: User message/query
+            conversation_history: Optional previous conversation messages
+
+        Yields:
+            Dict with stream events: tokens, status updates, final result
+        """
+        try:
+            self.logger.info(
+                f"Processing streaming consultation for user {user_id}: {message[:50]}...")
+
+            # Initialize state
+            initial_state: ConsultantState = {
+                "user_id": user_id,
+                "message": message,
+                "conversation_history": conversation_history,
+                "user_profile": None,
+                "extracted_preferences": {},
+                "products": [],
+                "response": "",
+                "recommendations": [],
+                "error": None,
+                "step": "start"
+            }
+
+            # Yield initial status
+            yield {
+                "type": "status",
+                "message": "Начинаю обработку запроса..."
+            }
+
+            # Track accumulated data
+            accumulated_data = {
+                "recommendations": [],
+                "products": [],
+                "extracted_preferences": {}
+            }
+            is_streaming_response = False
+
+            # Stream through graph using updates mode to get both tokens and state
+            async for chunk in self.graph.astream(initial_state, stream_mode="updates"):
+                for node_name, node_state in chunk.items():
+                    current_step = node_state.get("step", "")
+                    
+                    # Status updates for each node
+                    if current_step == "profile_loaded":
+                        yield {
+                            "type": "status",
+                            "message": "Загружаю ваш профиль..."
+                        }
+                    elif current_step == "preferences_extracted":
+                        yield {
+                            "type": "status",
+                            "message": "Анализирую предпочтения..."
+                        }
+                        # Accumulate preferences
+                        accumulated_data["extracted_preferences"] = node_state.get("extracted_preferences", {})
+                    elif current_step == "products_searched":
+                        yield {
+                            "type": "status",
+                            "message": "Подбираю подходящие товары..."
+                        }
+                        # Accumulate products
+                        accumulated_data["products"] = node_state.get("products", [])
+                    elif current_step == "response_generated":
+                        if not is_streaming_response:
+                            yield {
+                                "type": "status",
+                                "message": "Формирую рекомендации..."
+                            }
+                            is_streaming_response = True
+                        
+                        # Stream the response text token by token
+                        response_text = node_state.get("response", "")
+                        if response_text:
+                            # Simulate token-by-token streaming by splitting response
+                            # In real scenario, this would be actual LLM streaming
+                            for i in range(0, len(response_text), 3):  # Send ~3 chars at a time
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "content": token
+                                }
+                        
+                        # Accumulate recommendations
+                        accumulated_data["recommendations"] = node_state.get("recommendations", [])
+
+            # Send metadata after streaming completes
+            if accumulated_data["recommendations"] or accumulated_data["products"]:
+                yield {
+                    "type": "metadata",
+                    "recommendations": accumulated_data["recommendations"],
+                    "products": accumulated_data["products"],
+                    "extracted_preferences": accumulated_data["extracted_preferences"]
+                }
+
+            # Yield completion
+            yield {
+                "type": "done",
+                "message": "Готово"
+            }
+
+        except Exception as e:
+            self.logger.error(
+                f"Error in streaming consultation for user {user_id}: {e}", exc_info=True)
+            yield {
+                "type": "error",
+                "error": str(e),
+                "message": "Извините, произошла ошибка. Пожалуйста, попробуйте еще раз."
+            }
+
     async def _load_profile_node(self, state: ConsultantState) -> ConsultantState:
         """Node: Load customer profile from database"""
         try:

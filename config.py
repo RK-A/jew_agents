@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     
     # Database configuration
     postgres_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/jewelry"
+    postgres_user: str = "postgres"
+    postgres_password: str = "password"
     
     # Qdrant configuration
     qdrant_url: str = "http://localhost:6333"

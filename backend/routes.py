@@ -1,7 +1,10 @@
 """FastAPI routes for AI Jewelry Consultation System"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any
+import json
+import asyncio
 
 from backend.schemas import (
     ChatRequest,
@@ -82,6 +85,70 @@ async def orchestrator(
         )
 
 
+@router.post(
+    "/orchestrator/{user_id}/stream",
+    summary="Streaming orchestrator",
+    description="Handle user messages with real-time streaming through agent orchestrator"
+)
+async def orchestrator_stream(
+    user_id: str,
+    request: ChatRequest,
+    orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Handle streaming orchestrator request with Server-Sent Events
+
+    Args:
+        user_id: User identifier
+        request: Chat request with message and optional history
+        orchestrator: Agent orchestrator dependency
+
+    Returns:
+        StreamingResponse with SSE events
+    """
+    async def event_generator():
+        """Generate SSE events from orchestrator stream"""
+        try:
+            logger.info(f"Streaming orchestrator request from user {user_id}")
+            
+            # Stream events from orchestrator
+            async for event in orchestrator.handle_user_message_stream(
+                user_id=user_id,
+                message=request.message,
+                conversation_history=request.conversation_history,
+                explicit_task_type=request.explicit_task_type
+            ):
+                # Format as SSE event
+                event_data = json.dumps(event, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+                
+                # Small delay to prevent overwhelming the client
+                await asyncio.sleep(0.01)
+            
+            # Send final done event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Streaming orchestrator error for user {user_id}: {e}", exc_info=True)
+            error_event = json.dumps({
+                "type": "error",
+                "error": str(e),
+                "message": "Извините, произошла ошибка при обработке запроса."
+            }, ensure_ascii=False)
+            yield f"data: {error_event}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
+
 # Consultation endpoints
 @router.post(
     "/consultation/{user_id}",
@@ -144,6 +211,71 @@ async def consultation(
             agent="consultant",
             error=str(e)
         )
+
+
+@router.post(
+    "/consultation/{user_id}/stream",
+    summary="Streaming consultation with AI agent",
+    description="Get personalized jewelry recommendations with real-time streaming"
+)
+async def consultation_stream(
+    user_id: str,
+    request: ConsultationRequest,
+    orchestrator: AgentOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Handle streaming consultation request with Server-Sent Events
+
+    Args:
+        user_id: User identifier
+        request: Consultation request with message and optional history
+        orchestrator: Agent orchestrator dependency
+
+    Returns:
+        StreamingResponse with SSE events
+    """
+    async def event_generator():
+        """Generate SSE events from agent stream"""
+        try:
+            logger.info(f"Streaming consultation request from user {user_id}")
+            
+            # Get consultant agent from orchestrator
+            consultant_agent = orchestrator.consultant_agent
+            
+            # Stream events from agent
+            async for event in consultant_agent.process_stream(
+                user_id=user_id,
+                message=request.message,
+                conversation_history=request.conversation_history
+            ):
+                # Format as SSE event
+                event_data = json.dumps(event, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+                
+                # Small delay to prevent overwhelming the client
+                await asyncio.sleep(0.01)
+            
+            # Send final done event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Streaming consultation error for user {user_id}: {e}", exc_info=True)
+            error_event = json.dumps({
+                "type": "error",
+                "error": str(e),
+                "message": "Извините, произошла ошибка при обработке запроса."
+            }, ensure_ascii=False)
+            yield f"data: {error_event}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 
 @router.post(

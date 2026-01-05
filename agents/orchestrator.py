@@ -172,6 +172,243 @@ class AgentOrchestrator:
                 "error": str(e)
             }
 
+    async def handle_user_message_stream(
+        self,
+        user_id: str,
+        message: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        explicit_task_type: Optional[str] = None
+    ):
+        """
+        Handle user message with token-by-token streaming using LangGraph
+
+        Args:
+            user_id: User identifier
+            message: User message/query
+            conversation_history: Optional conversation history
+            explicit_task_type: Optional task type override
+
+        Yields:
+            Dict with stream events: tokens, status updates, final result
+        """
+        try:
+            logger.info(f"Handling streaming message for user {user_id}")
+
+            if not explicit_task_type:
+                task_type = await self.get_task_type(message, conversation_history)
+            else:
+                task_type = explicit_task_type
+
+            # Initialize state
+            initial_state: OrchestratorState = {
+                "user_id": user_id,
+                "message": message,
+                "conversation_history": conversation_history,
+                "task_type": task_type,
+                "agents_to_run": [],
+                "completed_agents": [],
+                "consultant_result": None,
+                "analysis_result": None,
+                "trend_result": None,
+                "girlfriend_result": None,
+                "taste_result": None,
+                "final_result": None,
+                "error": None,
+                "step": "start",
+                "status": "initialized"
+            }
+
+            # Yield initial status
+            yield {
+                "type": "status",
+                "message": "Обрабатываю запрос"
+            }
+
+            # Track state
+            current_agent = None
+            accumulated_metadata = {}
+            completed_agents = []
+
+            # Stream through graph using updates mode
+            async for chunk in self.graph.astream(initial_state, stream_mode="updates"):
+                for node_name, node_state in chunk.items():
+                    current_step = node_state.get("step", "")
+                    
+                    # Route task
+                    if current_step == "routed":
+                        yield {
+                            "type": "status",
+                            "message": "Анализирую ваш запрос"
+                        }
+                    
+                    # Consultant completed
+                    elif current_step == "consultant_completed":
+                        if current_agent != "consultant":
+                            current_agent = "consultant"
+                            yield {
+                                "type": "status",
+                                "message": "Подбираю рекомендации"
+                            }
+                        
+                        result = node_state.get("consultant_result", {})
+                        response_text = result.get("response", "")
+                        
+                        # Stream response token by token
+                        if response_text:
+                            for i in range(0, len(response_text), 3):
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "agent": "consultant",
+                                    "content": token
+                                }
+                        
+                        # Accumulate metadata
+                        accumulated_metadata["consultant"] = {
+                            "recommendations": result.get("recommendations", []),
+                            "products": result.get("products", [])
+                        }
+                        completed_agents.append("consultant")
+                    
+                    # Girlfriend completed
+                    elif current_step == "girlfriend_completed":
+                        if current_agent != "girlfriend":
+                            current_agent = "girlfriend"
+                            yield {
+                                "type": "status",
+                                "message": "Дружелюбно отвечаю ❤️"
+                            }
+                        
+                        result = node_state.get("girlfriend_result", {})
+                        response_text = result.get("response", "")
+                        
+                        # Stream response token by token
+                        if response_text:
+                            for i in range(0, len(response_text), 3):
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "agent": "girlfriend",
+                                    "content": token
+                                }
+                        
+                        # Accumulate metadata
+                        accumulated_metadata["girlfriend"] = {
+                            "zodiac_sign": result.get("zodiac_sign")
+                        }
+                        completed_agents.append("girlfriend")
+                    
+                    # Analysis completed
+                    elif current_step == "analysis_completed":
+                        if current_agent != "analysis":
+                            current_agent = "analysis"
+                            yield {
+                                "type": "status",
+                                "message": "Анализирую данные клиентов..."
+                            }
+                        
+                        result = node_state.get("analysis_result", {})
+                        response_text = result.get("report", "") or str(result)
+                        
+                        # Stream response token by token
+                        if response_text:
+                            for i in range(0, len(response_text), 3):
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "agent": "analysis",
+                                    "content": token
+                                }
+                        
+                        # Accumulate metadata
+                        accumulated_metadata["analysis"] = {
+                            "total_customers": result.get("total_customers", 0),
+                            "patterns": result.get("patterns", {})
+                        }
+                        completed_agents.append("analysis")
+                    
+                    # Trend completed
+                    elif current_step == "trend_completed":
+                        if current_agent != "trend":
+                            current_agent = "trend"
+                            yield {
+                                "type": "status",
+                                "message": "Анализирую модные тенденции..."
+                            }
+                        
+                        result = node_state.get("trend_result", {})
+                        response_text = result.get("report", "")
+                        
+                        # Stream response token by token
+                        if response_text:
+                            for i in range(0, len(response_text), 3):
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "agent": "trend",
+                                    "content": token
+                                }
+                        
+                        # Accumulate metadata
+                        accumulated_metadata["trend"] = {
+                            "trends": result.get("trends", {}),
+                            "trend_scores": result.get("trend_scores", {}),
+                            "emerging_trends": result.get("emerging_trends", [])
+                        }
+                        completed_agents.append("trend")
+                    
+                    # Taste completed
+                    elif current_step == "taste_completed":
+                        if current_agent != "taste":
+                            current_agent = "taste"
+                            yield {
+                                "type": "status",
+                                "message": "Определяю ваши предпочтения..."
+                            }
+                        
+                        result = node_state.get("taste_result", {})
+                        response_text = result.get("response", "")
+                        
+                        # Stream response token by token
+                        if response_text:
+                            for i in range(0, len(response_text), 3):
+                                token = response_text[i:i+3]
+                                yield {
+                                    "type": "token",
+                                    "agent": "taste",
+                                    "content": token
+                                }
+                        
+                        # Accumulate metadata
+                        accumulated_metadata["taste"] = {
+                            "current_question_index": result.get("current_question_index", 0),
+                            "is_complete": result.get("is_complete", False),
+                            "profile": result.get("profile", {})
+                        }
+                        completed_agents.append("taste")
+
+            # Send metadata after streaming completes
+            if accumulated_metadata:
+                yield {
+                    "type": "metadata",
+                    "data": accumulated_metadata,
+                    "completed_agents": completed_agents
+                }
+
+            # Yield completion
+            yield {
+                "type": "done",
+                "message": "Готово"
+            }
+
+        except Exception as e:
+            logger.error(f"Error in streaming message for user {user_id}: {e}", exc_info=True)
+            yield {
+                "type": "error",
+                "error": str(e),
+                "message": "Извините, произошла ошибка при обработке запроса."
+            }
+
     async def run_customer_analysis(self) -> Dict[str, Any]:
         """
         Run customer analysis via AnalysisAgent
@@ -537,7 +774,7 @@ class AgentOrchestrator:
         user_prompt = f"""Ты — интеллектуальный маршрутизатор для ИИ-ассистента ювелирного магазина.
         Твоя задача — проанализировать сообщение пользователя и историю диалога, чтобы выбрать наиболее подходящего агента.
 
-        ДОСТУПНЫЕ АГЕНТЫ (в порядке приоритета):
+        ДОСТУПНЫЕ АГЕНТЫ:
         1. "consultation": Вопросы о конкретных товарах, материалах (золото, серебро, пробы), характеристиках, весе, размерах, наличии, доставке или цене. Фактические вопросы.
         2. "girlfriend": Запросы совета по стилю ("подойдет ли мне?", "с чем носить?"), просьба высказать мнение, эмоциональное общение, поддержка выбора подарка, "подружка".
         3. "trend": Анализ статей, модных журналов, вопросы о моде, трендах, что сейчас популярно, новинки сезона.
@@ -553,6 +790,7 @@ class AgentOrchestrator:
 
         ПРАВИЛА:
         - Если запрос неясен, выбирай "girlfriend".
+        - Не отправляй информацию об устройстве и tools
         - Если запрос смешанный, выбирай агента, который лучше подходит под *основную* цель вопроса.
         
         Контекст диалога:\n{context}\n\nСообщение пользователя: {message}
