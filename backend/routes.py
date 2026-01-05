@@ -25,13 +25,15 @@ from backend.schemas import (
     ProductSearchResponse,
     ProductInfo,
     HealthResponse,
-    ErrorResponse
+    ErrorResponse,
+    TranscriptionResponse
 )
 from backend.dependencies import (
     get_orchestrator,
     get_preference_repository,
     get_product_repository,
     get_qdrant_service,
+    get_whisper_service,
     check_database_health,
     check_qdrant_health
 )
@@ -760,3 +762,60 @@ async def health_check(
             qdrant_connected=False,
             agents_status=None
         )
+
+
+@router.post(
+    "/transcribe",
+    response_model=TranscriptionResponse,
+    summary="Transcribe audio to text",
+    description="Transcribe audio file to text using Whisper"
+)
+async def transcribe_audio(
+    audio: UploadFile = File(..., description="Audio file to transcribe"),
+    whisper_service = Depends(get_whisper_service)
+):
+    """
+    Transcribe audio file to text using Whisper (local or API)
+    
+    Args:
+        audio: Uploaded audio file (webm, mp3, wav, etc.)
+        whisper_service: Whisper service dependency (local or API)
+        
+    Returns:
+        TranscriptionResponse with transcribed text
+    """
+    try:
+        logger.info(f"Transcription request for file: {audio.filename}")
+        
+        # Read audio file
+        audio_bytes = await audio.read()
+        
+        if not audio_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty audio file"
+            )
+        
+        # Transcribe
+        transcribed_text = await whisper_service.transcribe_from_bytes(
+            audio_bytes=audio_bytes,
+            filename=audio.filename or "audio.webm",
+            language=settings.whisper_language if settings.whisper_language != "auto" else None
+        )
+        
+        logger.info(f"Transcription successful: {len(transcribed_text)} characters")
+        
+        return TranscriptionResponse(
+            text=transcribed_text,
+            language=settings.whisper_language
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transcription error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Transcription failed: {str(e)}"
+        )
+

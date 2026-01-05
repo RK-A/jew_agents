@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     agent_custom_prompt_analysis: str = ""
     agent_custom_prompt_trend: str = ""
     
+    # Whisper configuration
+    whisper_model: str = "base"  # For local: tiny, base, small, medium, large-v2, large-v3; For API: whisper-1
+    whisper_api_key: str = ""  # If empty, will use llm_api_key
+    whisper_base_url: Optional[str] = None  # For local Whisper server
+    whisper_language: str = "ru"  # Default language for transcription
+    whisper_use_local: bool = True  # Use local Whisper instead of API
+    
     # Data generation configuration
     auto_fill_data: bool = False
     default_products_count: int = 80

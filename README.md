@@ -4,7 +4,9 @@ Multi-agent AI system for jewelry consultation with RAG and LLM integration.
 
 ## 🎯 Features
 
-- **3 AI Agents**: Consultation, Analytics, Trend Analysis
+- **5 AI Agents**: Consultation, Analytics, Trend Analysis, Girlfriend, Taste Detection
+- **Streaming Support**: Token-by-token streaming for real-time typing effect
+- **Voice Input**: Whisper audio transcription (OpenAI API or local server)
 - **LLM Providers**: OpenAI, GigaChat (runtime selection)
 - **Embeddings**: OpenAI, HuggingFace, GigaChat, Local API (LM Studio/LocalAI)
 - **RAG System**: Semantic search with Qdrant + LangChain
@@ -58,12 +60,27 @@ docker-compose restart backend
 
 ## 📡 API Endpoints
 
-- `POST /api/consultation/{user_id}` - Jewelry recommendations
+### Consultation & Chat
+- `POST /api/orchestrator/{user_id}` - Smart routing to appropriate agent
+- `POST /api/orchestrator/{user_id}/stream` - Streaming with typing effect
+- `POST /api/consultation/{user_id}` - Direct jewelry recommendations
+- `POST /api/consultation/{user_id}/stream` - Streaming consultation
+- `POST /api/girlfriend/{user_id}` - Friendly advice and style tips
+- `POST /api/taste/{user_id}` - Taste detection questionnaire
+
+### Voice & Audio
+- `POST /api/transcribe` - Audio to text with Whisper
+
+### Products & Search
 - `GET /api/customer/{user_id}/profile` - Customer profile
 - `PUT /api/customer/{user_id}/preferences` - Update preferences
 - `POST /api/products/search` - Semantic search
+
+### Analytics
 - `POST /api/analysis/customer` - Customer analytics
 - `POST /api/analysis/trends` - Trend analysis
+
+### System
 - `GET /api/health` - Health check
 
 **Example**:
@@ -146,6 +163,8 @@ See `env.example` for all options.
 ## 📚 Documentation
 
 - **CLAUDE.md** - Development guide (architecture, stack, rules)
+- **STREAMING.md** - Token-by-token streaming guide
+- **WHISPER.md** - Audio transcription setup
 - **INSTALL.md** - Installation guide with embeddings
 - **MIGRATION_LANGCHAIN.md** - LangChain embeddings migration
 - **env.example** - Configuration template

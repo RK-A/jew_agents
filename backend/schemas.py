@@ -260,3 +260,12 @@ class ErrorResponse(BaseModel):
     status: str = "error"
     error: str
     detail: Optional[str] = None
+
+
+# Audio transcription schemas
+class TranscriptionResponse(BaseModel):
+    """Response schema for audio transcription"""
+    text: str = Field(..., description="Transcribed text from audio")
+    language: Optional[str] = Field(None, description="Detected language")
+    duration: Optional[float] = Field(None, description="Audio duration in seconds")
+

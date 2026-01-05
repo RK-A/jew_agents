@@ -15,6 +15,8 @@ from llm.factory import create_llm_provider_from_config
 from rag.qdrant_service import QdrantService
 from rag.embedding_factory import create_embeddings_from_config
 from agents.orchestrator import AgentOrchestrator
+from audio.whisper_service import WhisperService
+from audio.local_whisper_service import LocalWhisperService
 from utils.logging import get_logger
 
 
@@ -227,10 +229,71 @@ async def check_qdrant_health(qdrant_service: QdrantService = None) -> bool:
         return False
 
 
+# Whisper service singleton
+_whisper_service_instance = None
+_local_whisper_service_instance = None
+
+
+async def get_whisper_service():
+    """
+    Get or create Whisper service singleton (API or local)
+    
+    Returns:
+        WhisperService or LocalWhisperService: Whisper audio transcription service
+    """
+    global _whisper_service_instance, _local_whisper_service_instance
+    
+    # Use local Whisper if configured
+    if settings.whisper_use_local:
+        if _local_whisper_service_instance is None:
+            try:
+                logger.info("Initializing local Whisper service")
+                
+                _local_whisper_service_instance = LocalWhisperService(
+                    model_size=settings.whisper_model,
+                    device="cpu",  # Change to "cuda" if GPU available
+                    compute_type="int8"
+                )
+                
+                logger.info("Local Whisper service initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize local Whisper service: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Local Whisper service unavailable: {str(e)}. Install with: pip install faster-whisper"
+                )
+        
+        return _local_whisper_service_instance
+    
+    # Use OpenAI Whisper API
+    else:
+        if _whisper_service_instance is None:
+            try:
+                logger.info("Initializing Whisper API service")
+                
+                api_key = settings.whisper_api_key or settings.llm_api_key
+                
+                _whisper_service_instance = WhisperService(
+                    api_key=api_key,
+                    model=settings.whisper_model,
+                    base_url=settings.whisper_base_url
+                )
+                
+                logger.info("Whisper API service initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize Whisper API service: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Whisper API service unavailable: {str(e)}"
+                )
+        
+        return _whisper_service_instance
+
+
 # Cleanup on shutdown
 async def cleanup_dependencies():
     """Cleanup all singleton dependencies"""
-    global _llm_provider_instance, _embeddings_instance, _qdrant_service_instance, _orchestrator_instance
+    global _llm_provider_instance, _embeddings_instance, _qdrant_service_instance, _orchestrator_instance, _whisper_service_instance, _local_whisper_service_instance
     
     logger.info("Cleaning up dependencies")
     
@@ -239,6 +302,8 @@ async def cleanup_dependencies():
     _embeddings_instance = None
     _qdrant_service_instance = None
     _orchestrator_instance = None
+    _whisper_service_instance = None
+    _local_whisper_service_instance = None
     
     logger.info("Dependencies cleanup complete")
 
